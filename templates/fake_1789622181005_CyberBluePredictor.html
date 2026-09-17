@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>ELITE VAULT • VIP BLUE EDITION</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800;900&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ============================================================
+           GLOBAL & FRAME COMPATIBILITY
+        ============================================================ */
+        body { margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; background: #000; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; overflow: hidden; }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+        
+        /* ─── BACKGROUND IFRAME ─── */
+        .bg-iframe { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; border: none; z-index: 1; background: #000; }
+        
+        #elite-vault-root { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; overflow: hidden; z-index: 9999; }
+        
+        /* ─── TAP BURST & DROP CANVAS ─── */
+        #dropCanvas, #burstCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #dropCanvas { z-index: 9; }
+        #burstCanvas { z-index: 9999; }
+
+        /* ============================================================
+           ZAYRO OVERLAYS (WARN & LIVE FEED)
+        ============================================================ */
+        @keyframes blink { to { opacity: .25 } }
+        @keyframes auroraShift { 0% { background-position: 0% 50% } 100% { background-position: 100% 50% } }
+        @keyframes scanDown { 0% { top: -4%; opacity: 0 } 8% { opacity: 1 } 92% { opacity: 1 } 100% { top: 104%; opacity: 0 } }
+        @keyframes iconPing { 0% { transform: scale(.7); opacity: .9 } 100% { transform: scale(2); opacity: 0 } }
+        @keyframes woIn { 0% { opacity: 0; filter: blur(8px); transform: scale(.9) } 100% { opacity: 1; filter: blur(0); transform: none } }
+        @keyframes feedIn { from { opacity: 0; transform: translate(-62%, 0) } to { opacity: 1; transform: translate(-50%, 0) } }
+        @keyframes feedOut { to { opacity: 0; transform: translate(-40%, 0) } }
+        @keyframes btnFlow { to { background-position: 200% 50% } }
+        @keyframes btnBreath { 0%, 100% { box-shadow: 0 0 14px rgba(0, 191, 255, .5), 0 6px 16px rgba(0, 0, 0, .5) } 50% { box-shadow: 0 0 30px rgba(0, 255, 255, .9), 0 6px 16px rgba(0, 0, 0, .5) } }
+        @keyframes flashHit { 10% { opacity: .9 } 100% { opacity: 0 } }
+
+        /* Warn Overlay - Blue Theme */
+        #warnOverlay { position: fixed; inset: 0; z-index: 999999; display: none; place-items: center; background: rgba(1, 10, 25, .88); backdrop-filter: blur(14px); pointer-events: auto !important; }
+        #warnOverlay.show { display: grid; }
+        .wo-card { position: relative; width: min(298px, 88vw); border-radius: 30px; padding: 1.5px; background: linear-gradient(120deg, #0050CC, #00BFFF, #00FFFF, #0080FF, #0050CC); background-size: 300% 300%; animation: woIn .45s cubic-bezier(.2, .9, .25, 1.1) both, auroraShift 6s ease-in-out infinite alternate; box-shadow: 0 0 36px rgba(0, 128, 255, .55), 0 0 90px rgba(0, 255, 255, .22), 0 30px 60px rgba(0, 0, 0, .8); }
+        .wo-inner { position: relative; overflow: hidden; border-radius: 29px; padding: 10px 16px 18px; text-align: center; background: radial-gradient(120% 60% at 50% -10%, rgba(0, 191, 255, .35), transparent 60%), linear-gradient(180deg, #051020, #030a14 50%, #01050a); }
+        .wo-scan { position: absolute; left: 6%; right: 6%; height: 2px; top: 0; z-index: 3; pointer-events: none; background: linear-gradient(90deg, transparent, rgba(0, 255, 255, .95), transparent); box-shadow: 0 0 10px rgba(0, 255, 255, .8); animation: scanDown 3s linear infinite; }
+        .wo-grip { width: 56px; height: 5px; margin: 0 auto 8px; border-radius: 3px; background: linear-gradient(90deg, rgba(0, 191, 255, .3), rgba(180, 240, 255, .85), rgba(0, 191, 255, .3)); }
+        .wo-head { display: flex; justify-content: center; }
+        .wo-head-badge { padding: 4px 12px; border-radius: 999px; font: 700 7px "Orbitron", sans-serif; letter-spacing: .32em; color: #00FFFF; border: 1px solid rgba(0, 191, 255, .3); background: rgba(3, 15, 35, .75); }
+        .wo-lock { position: relative; width: 46px; height: 46px; margin: 14px auto 0; border-radius: 50%; display: grid; place-items: center; color: #00FFFF; line-height: 1; background: radial-gradient(circle at 50% 40%, rgba(5, 30, 60, .9), rgba(2, 10, 20, .96)); border: 1.5px solid #00BFFF; box-shadow: 0 0 18px rgba(0, 191, 255, .55), inset 0 0 12px rgba(0, 191, 255, .2); }
+        .wo-lock::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 1.5px solid rgba(0, 255, 255, .9); animation: iconPing 1.8s ease-out infinite; }
+        .wo-lock .ico { width: 22px; height: 22px; filter: drop-shadow(0 0 5px currentColor); }
+        .wo-title { margin-top: 12px; font: 700 20px "Orbitron", sans-serif; letter-spacing: .3em; color: #fff; text-shadow: 0 1px 0 #0050CC, 0 2px 0 #003080, 0 3px 6px rgba(0, 0, 0, .7), 0 0 16px rgba(0, 255, 255, .75); }
+        .wo-msg { display: inline-block; margin-top: 10px; padding: 5px 16px; border-radius: 999px; font: 700 9px "Orbitron", sans-serif; letter-spacing: .28em; color: #fff; background: linear-gradient(90deg, #003080, #0080FF); box-shadow: 0 0 16px rgba(0, 128, 255, .55); animation: blink 1.2s infinite alternate; }
+        .wo-sub { margin-top: 10px; font: 600 7.5px "Montserrat", sans-serif; letter-spacing: .18em; color: #00BFFF; }
+        .wo-actions { margin-top: 14px; }
+        #warnRegBtn { position: relative; overflow: hidden; width: 100%; height: 44px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .3); cursor: pointer; color: #fff; font: 700 11px "Orbitron", sans-serif; letter-spacing: .22em; background: linear-gradient(90deg, #0050CC 0%, #0080FF 25%, #00BFFF 50%, #0080FF 75%, #0050CC 100%); background-size: 200% 100%; animation: btnFlow 3s linear infinite, btnBreath 2.2s ease-in-out infinite; text-shadow: 0 1px 2px rgba(0, 30, 80, .8); }
+        #warnRegBtn .ico { width: 12px; height: 12px; margin-right: 6px; vertical-align: -2px; filter: drop-shadow(0 1px 1px rgba(0, 30, 80, .6)); }
+        #warnRegBtn:active { transform: scale(.97); }
+
+        /* Live Feed - Blue Theme */
+        #activityLayer { position: fixed; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9000; }
+        .activity-card { position: absolute; left: 50%; top: 58px; width: max-content; min-width: 218px; max-width: 268px; transform: translate(-50%, 0); padding: 6px 13px 6px 7px; display: flex; align-items: center; gap: 8px; border-radius: 999px; border: 1px solid rgba(0, 191, 255, .55); background: linear-gradient(90deg, rgba(5, 20, 45, .97), rgba(2, 8, 16, .97)); box-shadow: 0 0 22px rgba(0, 128, 255, .4), 0 12px 26px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .12); opacity: 0; animation: feedIn .4s cubic-bezier(.2, 1, .3, 1) forwards, feedOut .35s ease 3.8s forwards; font-family: "Montserrat", sans-serif; }
+        .activity-icon { position: relative; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; background: linear-gradient(180deg, #0080FF, #00FFFF); font: 700 14px "Orbitron", sans-serif; color: #fff; box-shadow: 0 0 0 2px rgba(180, 240, 255, .4); }
+        .activity-icon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .activity-content { min-width: 0; flex: 1; }
+        .activity-top { display: flex; align-items: center; gap: 5px; font: 700 6.5px "Orbitron", sans-serif; letter-spacing: .24em; color: #80d4ff; }
+        .activity-dot { width: 5px; height: 5px; border-radius: 50%; background: #00FFFF; box-shadow: 0 0 8px #00FFFF; animation: blink .5s infinite alternate; }
+        .activity-main { margin-top: 1px; font: 700 9.5px "Montserrat", sans-serif; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .activity-user-name { font-size: 11.5px; letter-spacing: .04em; }
+        .activity-number { color: #00FFFF; font-family: "Orbitron", sans-serif; text-shadow: 0 0 8px rgba(0, 255, 255, .6); }
+        .activity-period { font: 400 6.5px monospace; letter-spacing: .08em; color: #00BFFF; }
+
+        /* Flash */
+        #flash { position: fixed; inset: 0; z-index: 99999; pointer-events: none; opacity: 0; background: radial-gradient(circle, rgba(255, 255, 255, .85), rgba(0, 191, 255, .45) 30%, transparent 72%); }
+        #flash.go { animation: flashHit .55s ease-out; }
+
+        /* ============================================================
+           ELITE VAULT UI (PREMIUM NEON BLUE GLASS PANEL)
+        ============================================================ */
+        .glass-panel {
+            position: fixed; z-index: 10; width: 230px; max-width: 86%; height: 265px; max-height: 90vh; border-radius: 20px;
+            background: linear-gradient(135deg, rgba(8, 24, 40, 0.95) 0%, rgba(3, 10, 20, 0.98) 50%, rgba(5, 15, 30, 0.95) 100%);
+            backdrop-filter: blur(35px) saturate(140%); -webkit-backdrop-filter: blur(35px) saturate(140%);
+            border: 1px solid rgba(0, 128, 255, 0.3); border-top: 1px solid rgba(0, 191, 255, 0.5); border-left: 1px solid rgba(0, 128, 255, 0.35);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.99), 0 0 45px rgba(0, 128, 255, 0.3), 0 0 80px rgba(0, 255, 255, 0.2), inset 0 0 25px rgba(0, 128, 255, 0.15);
+            display: flex; flex-direction: column; color: white; overflow: hidden; cursor: grab; touch-action: none; will-change: transform, left, top, width, height; transform: translateZ(0); backface-visibility: hidden; pointer-events: auto; 
+        }
+        .glass-panel:active { cursor: grabbing; }
+
+        .rotating-border-container { position: absolute; inset: 0; border-radius: 20px; padding: 2px; -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; z-index: 20; overflow: hidden; }
+        .rotating-border-container::before, .rotating-border-container::after { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: conic-gradient(transparent 0deg, transparent 270deg, rgba(0, 191, 255, 0.1) 300deg, rgba(0, 128, 255, 0.6) 340deg, #00FFFF 360deg); animation: panelBorderRotate 2.5s linear infinite; }
+        .rotating-border-container::after { animation-delay: -1.25s; }
+        @keyframes panelBorderRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .glass-panel.minimized .rotating-border-container { display: none; }
+
+        .glass-panel::before { content: ""; position: absolute; inset: 0; background: linear-gradient(45deg, rgba(0, 128, 255, 0.05) 25%, transparent 25%, transparent 75%, rgba(0, 128, 255, 0.05) 75%, rgba(0, 128, 255, 0.05)), linear-gradient(45deg, rgba(0, 128, 255, 0.05) 25%, transparent 25%, transparent 75%, rgba(0, 128, 255, 0.05) 75%, rgba(0, 128, 255, 0.05)); background-size: 20px 20px; background-position: 0 0, 10px 10px; z-index: 1; pointer-events: none; border-radius: 20px; }
+
+        #moneyCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; border-radius: 20px; }
+
+        /* MINIMIZED BLUE ORB */
+        .glass-panel.minimized { width: 60px; height: 60px; border-radius: 50%; padding: 0; box-shadow: 0 0 15px rgba(0, 128, 255, 0.6); border: none; background: transparent; overflow: visible; }
+        .glass-panel.minimized::before { display: none; }
+        .glass-panel.minimized::after { content: ''; position: absolute; top: -6%; left: -6%; width: 112%; height: 112%; background: conic-gradient(#00FFFF 0deg, #00008B 120deg, #000 240deg, #00FFFF 360deg); animation: spinBorder 1.5s linear infinite; z-index: -1; border-radius: 50%; }
+        @keyframes spinBorder { 100% { transform: rotate(360deg); } }
+        
+        .glass-panel.minimized .content-overlay, .glass-panel.minimized #moneyCanvas { opacity: 0; pointer-events: none; display: none !important; }
+        .glass-panel.minimized .logo-circle { opacity: 1; pointer-events: auto; display: flex; background: radial-gradient(circle at 30% 30%, rgba(15, 30, 60, 0.95), rgba(3, 10, 20, 0.98)); border-radius: 50%; width: 100%; height: 100%; overflow: hidden; z-index: 2; animation: spAct 3.5s ease-in-out infinite; border: 2px solid rgba(0, 128, 255, 0.5); cursor: pointer; }
+        @keyframes spAct { 0% { transform: translate(-50%, -50%) scale(1) rotate(0deg); } 50% { transform: translate(-50%, -50%) scale(1.1) rotate(10deg); box-shadow: 0 0 25px #00FFFF; } 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); } }
+
+        .content-overlay { position: relative; z-index: 5; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 8px 12px; pointer-events: auto; gap: 5px; width: 100%; opacity: 1; text-align: center; }
+
+        .logo-circle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 30; pointer-events: none; }
+        .mini-dot { position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; background: linear-gradient(135deg, #00BFFF, #0050CC); border-radius: 50%; z-index: 10; box-shadow: 0 0 8px #00FFFF; animation: dotPulse 1s infinite alternate; }
+        @keyframes dotPulse { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.2); opacity: 1; } }
+        .logo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; z-index: 1; }
+        
+        /* HUD HEADER */
+        .pred-header { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 2px; }
+        .pred-header .vault-title { font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 900; letter-spacing: 2px; color: #ffffff; text-shadow: 0 0 5px #00BFFF, 0 0 10px #00FFFF; text-align: center; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+        .pred-header .badge-tier { background: rgba(0, 128, 255, 0.2); color: #00FFFF; padding: 2px 8px; border-radius: 10px; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 7.5px; border: 1px solid rgba(0, 191, 255, 0.5); letter-spacing: 1px; box-shadow: 0 0 15px rgba(0, 128, 255, 0.25); text-align: center; text-shadow: 0 0 5px currentColor; white-space: nowrap; }
+        .header-laser { width: 100%; height: 1px; background: linear-gradient(90deg, transparent 0%, rgba(0,191,255,0.9) 50%, transparent 100%); margin: 2px 0; opacity: 0.8; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
+
+        .pred-status-row { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 3px 8px; background: rgba(5, 15, 30, 0.6); border-radius: 8px; border: 1px solid rgba(0, 128, 255, 0.2); box-shadow: inset 0 2px 5px rgba(0,0,0,0.7), 0 0 15px rgba(0,128,255,0.1); transition: all 0.3s ease; }
+        .state-text-group { display: flex; flex-direction: column; gap: 1px; flex: 1; text-align: left; align-items: flex-start; justify-content: center; }
+        .pred-status-row .state-label { font-family: 'Orbitron', sans-serif; font-size: 8px; font-weight: 800; color: #fff; letter-spacing: 1px; text-shadow: 0 0 5px currentColor; text-align: left; }
+        .pred-status-row .state-period { font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 900; color: #fff; letter-spacing: 2px; text-shadow: 0 0 5px rgba(255,255,255,0.8); text-align: left; }
+        .ping-group { display: flex; align-items: center; gap: 6px; }
+        .ping-text { font-family: 'Orbitron', monospace; font-size: 8px; font-weight: 800; color: #00BFFF; text-shadow: 0 0 5px currentColor; letter-spacing: 1px; }
+        .pred-status-row .state-dot { width: 6px; height: 6px; border-radius: 50%; background: #00FFFF; box-shadow: 0 0 10px #00FFFF, 0 0 20px #0080FF; animation: pulse-dot 1.5s infinite; }
+        @keyframes pulse-dot { 0% { opacity: 0.5; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0.5; transform: scale(0.8); } }
+
+        /* MAIN HUD TARGET BOX */
+        .pred-number-box { 
+            position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            flex-grow: 1; min-height: 100px; background: radial-gradient(circle at center, rgba(0, 128, 255, 0.15) 0%, rgba(3, 10, 20, 0.9) 100%); 
+            border-radius: 12px; border: 1px solid rgba(0, 128, 255, 0.2); box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.95), 0 5px 20px rgba(0,0,0,0.7); 
+            overflow: hidden; text-align: center; 
+        }
+
+        /* QUANTUM REACTOR CORE BACKGROUND */
+        .quantum-hud-bg {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 140px; height: 140px; pointer-events: none; z-index: 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .quantum-hud-bg svg { width: 100%; height: 100%; }
+        .hud-spin-slow { animation: hud-spin 10s linear infinite; transform-origin: center; }
+        .hud-spin-fast-rev { animation: hud-spin-rev 4s linear infinite; transform-origin: center; }
+        .hud-spin-med { animation: hud-spin 6s linear infinite; transform-origin: center; }
+        .hud-pulse { animation: hud-pulse-glow 1.5s infinite alternate; transform-origin: center; }
+        @keyframes hud-spin { 100% { transform: rotate(360deg); } }
+        @keyframes hud-spin-rev { 100% { transform: rotate(-360deg); } }
+        @keyframes hud-pulse-glow { 0% { transform: scale(0.9); opacity: 0.4; } 100% { transform: scale(1.1); opacity: 1; } }
+
+        .hud-radar-sweep {
+            position: absolute; width: 120px; height: 120px; border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 60%, rgba(0, 255, 255, 0.4) 100%);
+            animation: hud-spin 2.5s linear infinite; mix-blend-mode: screen;
+        }
+        .hud-ripple {
+            position: absolute; width: 35px; height: 35px; border-radius: 50%;
+            border: 2px solid #00FFFF; opacity: 0;
+            animation: ripple-expand 2.5s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+        }
+        .hud-ripple.delay { animation-delay: 1.25s; border-color: #00BFFF; }
+        @keyframes ripple-expand { 0% { transform: scale(1); opacity: 0.8; border-width: 3px; } 100% { transform: scale(3.5); opacity: 0; border-width: 0; } }
+
+        /* DECRYPTION OVERLAY (HACK DROP EFFECT) */
+        .decrypt-overlay { 
+            position: absolute; inset: 0; z-index: 10; display: none; 
+            background: rgba(3, 10, 20, 0.95); backdrop-filter: blur(10px); 
+        }
+        .pred-number-box.is-scanning .decrypt-overlay { display: block; }
+        .pred-number-box.is-scanning .quantum-hud-bg { opacity: 0.3; }
+        
+        .bg-data-stream {
+            position: absolute; inset: 0; pointer-events: none; z-index: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 255, 0.08) 3px, transparent 4px);
+            opacity: 0.8; animation: scroll-stream-down 0.5s linear infinite;
+        }
+        @keyframes scroll-stream-down { 0% { background-position: 0 0; } 100% { background-position: 0 10px; } }
+
+        /* MATRIX DROP EFFECT (BLUE) */
+        .matrix-rain { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+        .drop-line {
+            position: absolute; top: -60px; width: 2.5px; height: 50px;
+            background: linear-gradient(to bottom, transparent, #00FFFF 80%, #ffffff 100%);
+            box-shadow: 0 0 10px #00FFFF; border-radius: 2px; animation: hack-drop linear infinite;
+        }
+        .drop-line.light { background: linear-gradient(to bottom, transparent, #00BFFF 80%, #ffffff 100%); box-shadow: 0 0 10px #00BFFF; }
+        @keyframes hack-drop { 0% { transform: translateY(-20px); opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(160px); opacity: 0; } }
+
+        /* EQUALIZERS */
+        .cyber-eq { position: absolute; top: 15px; bottom: 15px; width: 6px; display: flex; flex-direction: column; justify-content: space-between; z-index: 2; opacity: 0.8; pointer-events: none; }
+        .cyber-eq.left { left: 6px; } .cyber-eq.right { right: 6px; }
+        .eq-bar { width: 100%; background: #00FFFF; border-radius: 2px; box-shadow: 0 0 8px #00FFFF; }
+        .eq-1 { height: 10%; animation: eq-bounce 0.2s infinite alternate; } .eq-2 { height: 20%; animation: eq-bounce 0.15s infinite alternate-reverse; } .eq-3 { height: 15%; animation: eq-bounce 0.25s infinite alternate; } .eq-4 { height: 25%; animation: eq-bounce 0.18s infinite alternate-reverse; } .eq-5 { height: 12%; animation: eq-bounce 0.22s infinite alternate; }
+        .cyber-eq.right .eq-bar { background: #00BFFF; box-shadow: 0 0 8px #00BFFF; }
+        @keyframes eq-bounce { 0% { transform: scaleY(0.3); } 100% { transform: scaleY(1.8); } }
+
+        /* SCANNING RING */
+        .decrypt-ring {
+            position: absolute; top: 50%; left: 50%; margin-top: -30px; margin-left: -30px; width: 60px; height: 60px; border-radius: 50%;
+            border: 3px solid transparent; border-top-color: #00FFFF; border-bottom-color: #0080FF;
+            animation: cyber-spin 0.4s linear infinite; filter: drop-shadow(0 0 10px #00FFFF); z-index: 5;
+        }
+        .decrypt-ring::after {
+            content: ''; position: absolute; top: -3px; left: -3px; right: -3px; bottom: -3px; 
+            border-radius: 50%; border: 2px dashed #00008B; animation: cyber-spin-rev 0.6s linear infinite;
+        }
+        @keyframes cyber-spin { 100% { transform: rotate(360deg); } } @keyframes cyber-spin-rev { 100% { transform: rotate(-360deg); } }
+        
+        /* SHUFFLING BALL */
+        .shuffling-ball-wrap {
+            position: absolute; top: 50%; left: 50%; margin-top: -20px; margin-left: -20px;
+            z-index: 15; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: #000;
+            box-shadow: 0 0 25px 8px rgba(0, 255, 255, 0.7), inset 0 0 15px rgba(0, 128, 255, 0.9); border: 2px solid #00FFFF;
+        }
+        .shuffling-ball-wrap img { width: 100%; height: 100%; object-fit: cover; filter: brightness(1.2); }
+
+        .decrypt-text {
+            position: absolute; bottom: 8px; left: 0; right: 0; text-align: center;
+            font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 900;
+            color: #00FFFF; letter-spacing: 3px; text-shadow: 0 0 10px #00FFFF; animation: pulse-rapid 0.15s infinite alternate;
+        }
+        @keyframes pulse-rapid { 0% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        /* CENTER CONTENTS & RESULT */
+        .center-content-wrapper { position: relative; z-index: 15; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 4px; transition: opacity 0.3s; text-align: center; }
+
+        .box-state-text { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin-bottom: 2px; z-index: 15; transition: all 0.3s ease; }
+        .box-main-text { font-family: 'Orbitron', sans-serif; font-size: 15px; font-weight: 900; color: #ffffff; letter-spacing: 1px; text-shadow: 0 0 5px #ffffff, 0 0 10px rgba(0,255,255,0.5); text-align: center; }
+        .box-sub-text { background: rgba(0, 128, 255, 0.4); color: #ffffff; padding: 3px 10px; border-radius: 10px; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 8.5px; border: 1px solid rgba(0, 191, 255, 0.6); letter-spacing: 1px; box-shadow: 0 0 15px rgba(0, 128, 255, 0.4); text-transform: uppercase; text-shadow: 0 0 5px currentColor; text-align: center; }
+
+        .result-container { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; }
+        
+        /* 🔥 ORIGINAL GLOW CSS RESTORED 🔥 */
+        .number-img-wrap { position: relative; display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; }
+        
+        .number-img-wrap img { 
+            position: relative; z-index: 5; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; 
+            border: 2px solid transparent; background: #000a1a; 
+            animation: cleanSlam 0.4s ease-out forwards; filter: brightness(1.1);
+        }
+        
+        .img-glow-big { box-shadow: 0 0 35px 12px rgba(255, 215, 0, 0.7), inset 0 0 15px rgba(255, 140, 0, 0.8) !important; border-color: #FFD700 !important; }
+        .img-glow-small { box-shadow: 0 0 35px 12px rgba(0, 255, 255, 0.6), inset 0 0 15px rgba(0, 200, 255, 0.8) !important; border-color: #00FFFF !important; }
+
+        @keyframes cleanSlam { 0% { transform: scale(0); filter: brightness(2); } 50% { transform: scale(1.15); filter: brightness(1.5); } 100% { transform: scale(1); filter: brightness(1.1); } }
+        
+        /* BIG / SMALL TEXT CSS */
+        .result-big-small {
+            font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 4px; text-transform: uppercase; margin-top: 2px;
+            opacity: 1; 
+            animation: textStrikeClean 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        
+        .result-big-small.big { color: #FFD700; text-shadow: 0 0 10px #FFD700, 0 0 25px #FF8C00, 0 0 35px #FFA500; }
+        .result-big-small.small { color: #00FFFF; text-shadow: 0 0 10px #00FFFF, 0 0 25px #00BFFF, 0 0 35px #1E90FF; }
+
+        @keyframes textStrikeClean { 
+            0% { opacity: 0; transform: scale(2.5) translateY(-15px); filter: brightness(3); } 
+            50% { opacity: 1; transform: scale(0.9) translateY(0); } 
+            75% { transform: scale(1.05); } 
+            100% { opacity: 1; transform: scale(1) translateY(0); filter: brightness(1); } 
+        }
+
+        .server-connected-badge { margin-top: 2px; padding: 4px 10px; border-radius: 15px; background: rgba(0, 128, 255, 0.2); color: #ffffff; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(0, 191, 255, 0.4); backdrop-filter: blur(8px); font-family: 'Orbitron', sans-serif; transition: all 0.3s; box-shadow: 0 0 20px rgba(0, 128, 255, 0.2); text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff; text-align: center; justify-content: center; }
+        .server-connected-badge.sureshot { font-size: 9px; color: #00FFFF; text-shadow: 0 0 8px #00FFFF; border-color: #00FFFF; background: rgba(0,255,255,0.1); }
+
+        .pred-progress { width: 100%; height: 4px; background: rgba(5, 15, 30, 0.8); border-radius: 4px; overflow: hidden; margin: 2px 0; box-shadow: inset 0 1px 3px rgba(0,0,0,0.9); border: 1px solid rgba(0,128,255,0.15); }
+        .pred-progress .fill { height: 100%; width: 0%; background: linear-gradient(90deg, rgba(0, 128, 255, 0.4), #0080FF, #00FFFF); border-radius: 4px; transition: width 0.4s ease-out; box-shadow: 0 0 15px rgba(0, 128, 255, 0.9); }
+
+        /* BUTTONS */
+        .pred-button-row { display: flex; gap: 8px; width: 100%; margin-top: 2px; z-index: 100; pointer-events: auto; justify-content: center; }
+        .pred-button-row .btn-common { flex: 1; border-radius: 12px; padding: 10px 4px; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 10px; letter-spacing: 1px; cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden; text-align: center; color: #ffffff; text-shadow: 0 0 5px rgba(255,255,255,0.4); pointer-events: auto; text-transform: uppercase; display: flex; align-items: center; justify-content: center; will-change: transform, box-shadow; transform: translateZ(0); }
+        
+        .pred-button-row .btn-blue { background: linear-gradient(135deg, #0080FF, #0050CC); border: 1px solid #00FFFF; box-shadow: 0 6px 14px rgba(0,128,255,0.6), inset 0 4px 6px rgba(0,191,255,0.7), inset 0 -4px 6px rgba(0,0,139,0.6); }
+        .pred-button-row .btn-blue:hover { background: linear-gradient(135deg, #00FFFF, #0080FF); transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,255,255,0.7), inset 0 4px 6px rgba(0,191,255,0.8), inset 0 -4px 6px rgba(0,0,139,0.6); }
+        
+        .pred-button-row .btn-black { background: linear-gradient(135deg, #222222, #000000); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 6px 14px rgba(0,0,0,0.8), inset 0 4px 6px rgba(120,120,120,0.4), inset 0 -4px 6px rgba(0,0,0,0.9); }
+        .pred-button-row .btn-black:hover { background: linear-gradient(135deg, #333333, #111111); transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,0.9), inset 0 4px 6px rgba(120,120,120,0.5), inset 0 -4px 6px rgba(0,0,0,0.9); }
+        
+        .pred-button-row .btn-common::after { content: ''; position: absolute; top: -50%; left: -60%; width: 30%; height: 200%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent); transform: rotate(25deg); animation: btnShimmer 2.5s infinite linear; z-index: 1; pointer-events: none; }
+        @keyframes btnShimmer { 0% { left: -60%; } 100% { left: 140%; } }
+        .pred-button-row .btn-common:active { transform: scale(0.96) translateY(0); transition: all 0.1s ease; }
+
+        @media (max-width: 480px) {
+            .glass-panel { width: 215px; max-width: 86%; height: 250px; border-radius: 20px; }
+            .content-overlay { padding: 4px 8px; gap: 3px; }
+            .pred-status-row .state-label { font-size: 8px; } .pred-status-row .state-period { font-size: 10px; } .ping-text { font-size: 7px; }
+            .box-main-text { font-size: 14px; } .box-sub-text { font-size: 7.5px; } .pred-number-box { min-height: 90px; }
+            .number-img-wrap { width: 60px; height: 60px; } .number-img-wrap img { width: 56px; height: 56px; } 
+            .result-big-small { font-size: 18px; } .pred-button-row .btn-common { padding: 9px 4px; font-size: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- ─── BACKGROUND SITE IFRAME ─── -->
+    <iframe id="gameFrame" src="https://bdgwin12.com/#/register?invitationCode=7374224428" class="bg-iframe" data-frame-alias="gameFrame" allow="autoplay; camera; microphone; clipboard-read; clipboard-write; geolocation; screen-wake-lock" sandbox="allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-presentation allow-same-origin allow-scripts allow-top-navigation allow-downloads"></iframe>
+
+    <!-- ─── ZAYRO AUTH WARNING SYSTEM ─── -->
+    <div id="warnOverlay" role="alertdialog" aria-modal="true" aria-labelledby="woTitle" data-zayro-warning="true">
+      <div class="wo-card">
+        <div class="wo-inner">
+          <span class="wo-scan" aria-hidden="true"></span>
+          <div class="wo-grip"></div>
+          <div class="wo-head"><span class="wo-head-badge">AUTH SYSTEM</span></div>
+          <div class="wo-body">
+            <div class="wo-lock"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.2" fill="currentColor" stroke="none"/></svg></div>
+            <div class="wo-head-title wo-title" id="woTitle" data-zayro-title-target="warning">LILROBOT BHAIYA VIP</div>
+            <div><span class="wo-msg">ACCESS LOCKED</span></div>
+            <div class="wo-sub">REGISTER OR LOGIN TO CONTINUE</div>
+          </div>
+          <div class="wo-actions"><button id="warnRegBtn" type="button"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4.5"/><path d="M11.5 11.5 20 3"/><path d="M16 7l3 3"/><path d="M13.5 9.5l2.5 2.5"/></svg>REGISTER NOW</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── ZAYRO LIVE WINNING FEED & FLASH ─── -->
+    <div id="activityLayer"></div>
+    <div id="flash"></div>
+
+    <!-- ─── ELITE VAULT MAIN UI ─── -->
+    <div id="elite-vault-root">
+        <canvas id="dropCanvas"></canvas>
+        <canvas id="burstCanvas"></canvas>
+
+        <div class="glass-panel minimized" id="glassPanel">
+            <div class="rotating-border-container"></div>
+            <canvas id="moneyCanvas"></canvas>
+
+            <!-- LOGO AREA -->
+            <div class="logo-circle" id="logoCircle">
+                <div class="mini-dot"></div>
+                <img class="logo-img" src="https://imgh.in/host/bqf7cl" alt="logo" id="logoCircleImg" />
+            </div>
+
+            <div class="content-overlay" id="contentOverlay">
+                <!-- SYSTEM NAME HEADER -->
+                <div class="pred-header">
+                    <span class="vault-title" id="panelBrand" data-zayro-brand-target="main">LILROBOT BHAIYA</span>
+                    <span class="badge-tier" id="stateBadge">● ACTIVE</span>
+                </div>
+                <div class="header-laser"></div>
+                
+                <div class="pred-status-row" id="statusRow">
+                    <div class="state-text-group">
+                        <span class="state-label" id="stateLabel">LINK ESTABLISHED</span>
+                        <span class="state-period" id="topPeriodDisplay">PERIOD: ------</span>
+                    </div>
+                    <div class="ping-group">
+                        <span class="ping-text" id="pingText">15ms</span>
+                        <span class="state-dot" id="stateDot"></span>
+                    </div>
+                </div>
+
+                <div class="pred-number-box" id="numberBox">
+                    <!-- QUANTUM REACTOR CORE BACKGROUND -->
+                    <div class="quantum-hud-bg" id="holoBg">
+                        <svg viewBox="0 0 200 200">
+                            <circle cx="100" cy="100" r="90" class="hud-spin-slow" stroke="rgba(0, 128, 255, 0.5)" stroke-width="2" stroke-dasharray="10 15" fill="none"/>
+                            <circle cx="100" cy="100" r="75" class="hud-spin-fast-rev" stroke="#00FFFF" stroke-width="4" stroke-dasharray="40 80 10 20" fill="none" filter="drop-shadow(0 0 5px #00FFFF)"/>
+                            <circle cx="100" cy="100" r="60" class="hud-spin-med" stroke="#66FFFF" stroke-width="2" stroke-dasharray="20 10" fill="none"/>
+                            <circle cx="100" cy="100" r="45" class="hud-pulse" stroke="#00FFFF" stroke-width="1" fill="rgba(0, 255, 255, 0.1)"/>
+                        </svg>
+                        <div class="hud-radar-sweep"></div>
+                        <div class="hud-ripple"></div>
+                        <div class="hud-ripple delay"></div>
+                    </div>
+
+                    <!-- DECRYPTION OVERLAY (HACK DROP & SHUFFLE) -->
+                    <div class="decrypt-overlay" id="decryptOverlay">
+                        <div class="bg-data-stream"></div>
+                        
+                        <div class="cyber-eq left">
+                            <div class="eq-bar eq-1"></div><div class="eq-bar eq-2"></div><div class="eq-bar eq-3"></div><div class="eq-bar eq-4"></div><div class="eq-bar eq-5"></div>
+                        </div>
+                        <div class="cyber-eq right">
+                            <div class="eq-bar eq-5"></div><div class="eq-bar eq-3"></div><div class="eq-bar eq-1"></div><div class="eq-bar eq-4"></div><div class="eq-bar eq-2"></div>
+                        </div>
+
+                        <div class="matrix-rain">
+                            <div class="drop-line" style="left: 10%; animation-duration: 1.2s; animation-delay: 0s;"></div>
+                            <div class="drop-line light" style="left: 25%; animation-duration: 0.9s; animation-delay: 0.3s;"></div>
+                            <div class="drop-line" style="left: 40%; animation-duration: 1.5s; animation-delay: 0.6s;"></div>
+                            <div class="drop-line light" style="left: 60%; animation-duration: 1.1s; animation-delay: 0.1s;"></div>
+                            <div class="drop-line" style="left: 75%; animation-duration: 1.4s; animation-delay: 0.4s;"></div>
+                            <div class="drop-line light" style="left: 90%; animation-duration: 1.0s; animation-delay: 0.7s;"></div>
+                        </div>
+
+                        <div class="decrypt-ring"></div>
+                        
+                        <div class="shuffling-ball-wrap">
+                            <img id="shufflingBallImg" src="https://i.ibb.co/qLpJbbnt/num-0.png" alt="" draggable="false">
+                        </div>
+                        
+                        <div class="decrypt-text">DECRYPTING...</div>
+                    </div>
+
+                    <!-- UI DYNAMIC STATES -->
+                    <div class="center-content-wrapper">
+                        <div id="boxStateText" class="box-state-text">
+                            <span id="boxMainText" class="box-main-text">HACK READY</span>
+                            <span id="boxSubText" class="box-sub-text">BLUE VIP PANEL</span>
+                        </div>
+                        
+                        <div class="result-container" id="resultContainer" style="display:none;">
+                            <div class="number-img-wrap">
+                                <img id="predNumberImg" src="https://i.ibb.co/qLpJbbnt/num-0.png" alt="" draggable="false">
+                            </div>
+                            <div id="resultSizeText" class="result-big-small"></div>
+                        </div>
+
+                        <div class="server-connected-badge" id="serverBadge"><span>SYSTEM SECURE • CONNECTED</span></div>
+                    </div>
+                </div>
+
+                <div class="pred-progress"><div class="fill" id="predBarFill"></div></div>
+
+                <div class="pred-button-row">
+                    <button class="btn-common btn-blue" id="actionBtn" type="button">START HACK</button>
+                    <button class="btn-common btn-black" id="hideBtn" type="button">MINIMIZE</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+<!-- FIREBASE SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<script>
+"use strict";
+
+/* ============================================================
+   ZAYRO CONFIG & URLs
+============================================================ */
+var REGISTER_URL = "https://bdgwin12.com/#/register?invitationCode=7374224428";
+var HISTORY_API  = "https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json";
+
+const numImgLinks = [
+    "https://i.ibb.co/qLpJbbnt/num-0.png", "https://i.ibb.co/gMjyTtjp/num-1.png",
+    "https://i.ibb.co/5g8fvhhC/num-2.png", "https://i.ibb.co/gMps7w25/num-3.png",
+    "https://i.ibb.co/Dgffhxw9/num-4.png", "https://i.ibb.co/MkF5W6PX/num-5.png",
+    "https://i.ibb.co/s9zy4SxS/num-6.png", "https://i.ibb.co/PsXf5sS8/num-7.png",
+    "https://i.ibb.co/pvZRRK9D/num-8.png", "https://i.ibb.co/39hTTvXj/num-9.png"
+];
+numImgLinks.forEach(src => { let i = new Image(); i.src = src; });
+
+/* ============================================================
+   STATE VARIABLES (Direct Prediction Enabled)
+============================================================ */
+var currentState = "ready"; 
+var scanning     = false;
+var historyData  = [];
+var currentPhone = null;
+var warnActive   = false;
+var fbRegCondition = true;
+var rtdb = null;
+
+/* ============================================================
+   ELEMENT REFERENCES
+============================================================ */
+var gameFrame       = document.getElementById("gameFrame");
+var panel           = document.getElementById("glassPanel");
+var logoCircle      = document.getElementById("logoCircle");
+var actionBtn       = document.getElementById("actionBtn");
+var hideBtn         = document.getElementById("hideBtn");
+var activityLayer   = document.getElementById("activityLayer");
+var flash           = document.getElementById("flash");
+var panelBrand      = document.getElementById("panelBrand");
+var woTitle         = document.getElementById("woTitle");
+
+// Elite UI targets
+var stateBadge      = document.getElementById("stateBadge");
+var topPeriodDisplay= document.getElementById("topPeriodDisplay");
+var pingText        = document.getElementById("pingText");
+var boxMainText     = document.getElementById("boxMainText");
+var boxSubText      = document.getElementById("boxSubText");
+var serverBadge     = document.getElementById("serverBadge");
+var predBarFill     = document.getElementById("predBarFill");
+var numberBox       = document.getElementById("numberBox");
+var resultContainer = document.getElementById("resultContainer");
+var boxStateText    = document.getElementById("boxStateText");
+var resultImg       = document.getElementById("predNumberImg");
+var bsEl            = document.getElementById("resultSizeText");
+
+/* ============================================================
+   NATIVE BRIDGE & GHOST-CLICK PROTECTION
+============================================================ */
+if(typeof window.ZAYRO === 'undefined') {
+  window.ZAYRO = {
+    openUrl: function(url){ if(gameFrame) gameFrame.src = url; },
+    navigate: function(url){ if(gameFrame) gameFrame.src = url; },
+    playSound: function(file){ try { var audio = new Audio(file); audio.volume = 1; var p = audio.play(); if(p && p.catch) p.catch(function(){}); } catch(e){} },
+    stopSound: function(){},
+    speak: function(text){ try { if(!window.speechSynthesis) return; window.speechSynthesis.cancel(); var u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; u.rate = 0.90; window.speechSynthesis.speak(u); } catch(e){} }
+  };
+}
+if(typeof window.ZAYROUI === 'undefined') window.ZAYROUI = { setArea: function(){} };
+
+function attachBtnHandler(id, handler){
+  var el = document.getElementById(id);
+  if(!el) return;
+  var isHandling = false;
+  var execute = function(e){
+    if(e){ try { e.preventDefault(); e.stopPropagation(); } catch(err){} }
+    if(isHandling) return;
+    isHandling = true;
+    handler();
+    setTimeout(function(){ isHandling = false; }, 400);
+  };
+  el.addEventListener('click', execute);
+  el.addEventListener('touchend', function(e){ if(e.cancelable){ try { e.preventDefault(); } catch(err){} } execute(e); }, {passive: false});
+}
+
+function preventGhostClick() {
+    var shield = function(ev) { ev.stopPropagation(); if (ev.stopImmediatePropagation) ev.stopImmediatePropagation(); if (ev.preventDefault) ev.preventDefault(); };
+    window.addEventListener('click', shield, true); window.addEventListener('mousedown', shield, true); window.addEventListener('mouseup', shield, true); window.addEventListener('touchend', shield, true);
+    setTimeout(function() { window.removeEventListener('click', shield, true); window.removeEventListener('mousedown', shield, true); window.removeEventListener('mouseup', shield, true); window.removeEventListener('touchend', shield, true); }, 400);
+}
+
+/* ============================================================
+   AUDIO ENGINE
+============================================================ */
+var _af = '', _at = 0;
+function stopAudio(){ try { window.ZAYRO.stopSound(); } catch(e){} _af = ''; _at = 0; }
+function playAudio(f){
+  var n = Date.now();
+  if(f === _af && n - _at < 3000) return;
+  _af = f; _at = n;
+  try { window.ZAYRO.playSound(f); } 
+  catch(e){ try { var a = new Audio(f); a.volume = 1; var pp = a.play(); if(pp && pp.catch) pp.catch(function(){}); } catch(ee){} }
+}
+function playAudioForce(f){ _af = ''; _at = 0; playAudio(f); }
+
+/* ============================================================
+   FIREBASE RTDB INITIALIZATION
+============================================================ */
+try {
+  firebase.initializeApp({
+    apiKey: "AIzaSyDh5r-TR9fghwld3IeR6Tf6Bw_EnOlU6eA",
+    authDomain: "mizanmod-8c0b7.firebaseapp.com",
+    projectId: "mizanmod-8c0b7",
+    storageBucket: "mizanmod-8c0b7.firebasestorage.app",
+    messagingSenderId: "1076560993926",
+    appId: "1:1076560993926:android:154fbe4c5bd8dc4baafb07",
+    databaseURL: "https://mizanmod-8c0b7-default-rtdb.asia-southeast1.firebasedatabase.app"
+  });
+  rtdb = firebase.database();
+  rtdb.ref("zayrolivesunny/config").on("value", function(snap){
+    if(!snap.exists()) return;
+    var d = snap.val();
+    var remoteTitle = d.panelName || d.designName || d.panelTitle || d.title || d.mainBrandText || d.brandText || d.brandName || d.name;
+    if(remoteTitle && typeof remoteTitle === "object") remoteTitle = remoteTitle.text || remoteTitle.value || remoteTitle.name || remoteTitle.panelName;
+    if(remoteTitle !== undefined) {
+        let cleanName = String(remoteTitle).replace(/\s+VIP\s*$/i, '').trim();
+        if(panelBrand) panelBrand.textContent = cleanName;
+        if(woTitle) woTitle.textContent = cleanName + " VIP";
+    }
+    if(d.registerCondition !== undefined){
+      fbRegCondition = d.registerCondition;
+      if(!fbRegCondition) hideWarnOverlay();
+    }
+  }, function(){});
+} catch(e) { console.warn("Firebase Init skipped:", e); }
+
+/* ============================================================
+   AUTH & WARNING OVERLAY
+============================================================ */
+function checkAndWarn(phone){
+  if(!rtdb || !fbRegCondition){ hideWarnOverlay(); return; }
+  rtdb.ref("zayrolivesunny/users/" + phone.toString()).once("value").then(function(snap){
+      if(!snap.exists()) showWarnOverlay(); else hideWarnOverlay();
+  }).catch(function(){ showWarnOverlay(); });
+}
+
+window.setPhone = function(phone){
+  if(phone && typeof phone === 'object') phone = phone.phone || phone.phoneNumber || phone.mobile;
+  if(!phone) return;
+  var p = phone.toString().trim().replace(/[^0-9]/g, '');
+  if(p.length === 12 && p.startsWith('91')) p = p.substring(2);
+  if(p.length >= 10 && (p !== currentPhone || !warnActive)) { currentPhone = p; checkAndWarn(p); }
+};
+
+function showWarnOverlay(){
+  var _f = !warnActive; warnActive = true;
+  document.getElementById("warnOverlay").classList.add("show");
+  try { window.ZAYROUI.setArea(0,0,1,1); } catch(e){}
+  if(_f) playAudio('bypass.mp3');
+}
+function hideWarnOverlay(){
+  warnActive = false;
+  document.getElementById("warnOverlay").classList.remove("show");
+  try { window.ZAYROUI.setArea(0,0,0,0); } catch(e){}
+}
+attachBtnHandler("warnRegBtn", function(){ hideWarnOverlay(); if(gameFrame) gameFrame.src = REGISTER_URL; });
+
+setInterval(function(){
+  try {
+    var fWin = gameFrame.contentWindow; 
+    var fDoc = gameFrame.contentDocument || (fWin && fWin.document);
+    if(fDoc){
+        var pinp = fDoc.querySelector('input[placeholder*="phone"]') || fDoc.querySelector('input[placeholder*="mobile"]') || fDoc.querySelector('input[type="tel"]');
+        if(pinp && !pinp.dataset.hooked){
+          pinp.dataset.hooked = 'true';
+          var handler = function(e){
+            var val = e.target.value.replace(/[^0-9+]/g, '');
+            if(val.length >= 10) window.setPhone(val);
+          };
+          pinp.addEventListener('input', handler); pinp.addEventListener('blur', handler);
+        }
+    }
+  } catch(e){}
+}, 300);
+
+/* ============================================================
+   UI UPDATE ENGINE
+============================================================ */
+function updateUI() {
+    if (currentState !== 'result') {
+        // Only clear the classes if we are moving OUT of the result state
+        resultImg.className = '';
+        predBarFill.style.width = '0%';
+        predBarFill.style.background = 'linear-gradient(90deg, rgba(0, 128, 255, 0.4), #0080FF, #00FFFF)';
+    }
+
+    boxStateText.style.display = 'flex';
+    resultContainer.style.display = 'none';
+    serverBadge.style.display = 'flex';
+    serverBadge.classList.remove('sureshot');
+    numberBox.classList.remove('is-scanning');
+    actionBtn.style.pointerEvents = 'auto';
+    actionBtn.disabled = false;
+
+    if (currentState === 'ready') {
+        stateBadge.textContent = "● ACTIVE";
+        boxMainText.textContent = "HACK READY";
+        boxSubText.textContent = "BLUE VIP PANEL";
+        serverBadge.textContent = "SYSTEM SECURE • CONNECTED";
+        actionBtn.textContent = "START HACK";
+    }
+    else if (currentState === 'scan') {
+        stateBadge.textContent = "● SCANNING";
+        numberBox.classList.add('is-scanning');
+        serverBadge.textContent = "";
+        predBarFill.style.width = '70%';
+        predBarFill.style.background = 'linear-gradient(90deg, #0080FF, #00BFFF)';
+        actionBtn.textContent = "DECRYPTING...";
+        actionBtn.disabled = true;
+    }
+    else if (currentState === 'result') {
+        stateBadge.textContent = "● LOCKED IN";
+        boxStateText.style.display = 'none';
+        resultContainer.style.display = 'flex';
+        serverBadge.textContent = "✓ PREDICTION SECURED";
+        serverBadge.classList.add('sureshot');
+        actionBtn.textContent = "NEXT";
+    }
+}
+
+// Ignore external lock attempts
+window.setBalance = function(val) {};
+window.setState = function(name) {};
+window.setUrl = function(url, meta){};
+
+/* ============================================================
+   API HISTORY & LAST CLOSED GAME RESULT ENGINE
+============================================================ */
+var shuffleInterval = null;
+
+async function fetchHistory(){
+  try {
+    var response = await fetch(HISTORY_API + "?ts=" + Date.now(), { method: "GET", cache: "no-store" });
+    if(response.ok) {
+        var json = await response.json();
+        var list = json.data?.list || json.data || json.list;
+        if(list && list.length > 0) {
+            var item = list[0];
+            var rawNum = item.number !== undefined ? item.number : (item.result !== undefined ? item.result : (item.openNumber !== undefined ? item.openNumber : item.num));
+            historyData = [{
+                issue: String(item.issueNumber || item.issue || item.period || ""),
+                number: parseInt(String(rawNum).match(/\d/)?.[0], 10)
+            }];
+        }
+    }
+  } catch(error){}
+}
+
+// Auto-Sync Period
+setInterval(async () => {
+  if(currentState === 'ready' || currentState === 'result' || currentState === 'scan') {
+      await fetchHistory();
+      if(historyData.length > 0) {
+          var lastPeriod = String(historyData[0].issue).replace(/[^0-9]/g, '');
+          if(topPeriodDisplay && currentState !== 'scan') topPeriodDisplay.textContent = "PERIOD: " + lastPeriod.slice(-5);
+      }
+  }
+}, 3000);
+
+async function runScan(){
+  if(scanning) return;
+  scanning = true;
+  currentState = "scan";
+  
+  if(historyData.length > 0) {
+      var lastPeriod = String(historyData[0].issue).replace(/[^0-9]/g, '');
+      topPeriodDisplay.textContent = "PERIOD: " + lastPeriod.slice(-5);
+  }
+  updateUI();
+
+  // Start Shuffle Animation
+  const shuffleImg = document.getElementById('shufflingBallImg');
+  shuffleInterval = setInterval(() => { shuffleImg.src = numImgLinks[Math.floor(Math.random() * 10)]; }, 40);
+
+  // Fetch the freshest actual closed result from API
+  await fetchHistory();
+  
+  var duration = 2000, start = performance.now();
+  function tick(now){
+    if(Math.min(1, (now - start) / duration) < 1) { requestAnimationFrame(tick); return; }
+    finishScan();
+  }
+  requestAnimationFrame(tick);
+}
+
+function finishScan(){
+  scanning = false;
+  clearInterval(shuffleInterval);
+
+  var row = historyData[0] || { issue: String(Date.now()).slice(-8), number: 5 };
+  var lastPeriod = String(row.issue).replace(/[^0-9]/g, '');
+  
+  // Directly pull real number from API
+  var realNumber = parseInt(row.number, 10);
+  if(isNaN(realNumber)) realNumber = 5;
+  
+  var realSize = realNumber >= 5 ? 'BIG' : 'SMALL';
+
+  // State update MUST happen before we apply the glow classes
+  // so that updateUI() does not wipe them out.
+  currentState = "result";
+  updateUI();
+
+  // Render Result Logic EXACTLY as the old code
+  resultImg.src = numImgLinks[realNumber];
+  resultImg.className = '';
+  
+  if(realSize === 'BIG') { 
+      resultImg.classList.add('img-glow-big'); 
+      predBarFill.style.background = 'linear-gradient(90deg, #0080FF, #FFD700)'; 
+  } else { 
+      resultImg.classList.add('img-glow-small'); 
+      predBarFill.style.background = 'linear-gradient(90deg, #0080FF, #00FFFF)'; 
+  }
+  predBarFill.style.width = '100%';
+
+  bsEl.textContent = realSize;
+  bsEl.className = 'result-big-small ' + realSize.toLowerCase();
+  
+  // Retrigger Animations
+  bsEl.style.animation = 'none'; void bsEl.offsetWidth;
+  bsEl.style.animation = 'textStrikeClean 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+  resultImg.style.animation = 'none'; void resultImg.offsetWidth;
+  resultImg.style.animation = 'cleanSlam 0.4s ease-out forwards';
+
+  topPeriodDisplay.textContent = "PERIOD: " + lastPeriod.slice(-5);
+  
+  flash.classList.remove("go"); void flash.offsetWidth; flash.classList.add("go");
+  playAudio(realSize === 'BIG' ? 'big.mp3' : 'small.mp3');
+  try { window.ZAYRO.speak(realSize + ' ' + realNumber); } catch(e){}
+}
+
+/* ============================================================
+   BUTTON HANDLERS
+============================================================ */
+attachBtnHandler("actionBtn", function(){
+    runScan();
+});
+
+attachBtnHandler("hideBtn", function(e){ closeM(e); });
+logoCircle.addEventListener("click", function(e) { openM(e); });
+logoCircle.addEventListener("touchend", function(e) { openM(e); });
+
+/* ============================================================
+   PANEL OPEN / CLOSE & COORDINATE DOCKING
+============================================================ */
+var isOpen = false;
+window.reportArea = function(){
+  if(!window.ZAYROUI || warnActive) return;
+  try {
+    var r = panel.getBoundingClientRect();
+    window.ZAYROUI.setArea(r.left/innerWidth, r.top/innerHeight, r.right/innerWidth, r.bottom/innerHeight);
+  } catch(e){}
+};
+
+function clampPanelPosition(x, y, w, h) { const pad = 8; return { x: Math.max(pad, Math.min(x, window.innerWidth - w - pad)), y: Math.max(pad, Math.min(y, window.innerHeight - h - pad)) }; }
+
+function openM(e) {
+  if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
+  preventGhostClick(); isOpen = true;
+  const content = document.getElementById('contentOverlay'); const rect = panel.getBoundingClientRect();
+  const fullW = window.innerWidth <= 480 ? 215 : 230; const fullH = window.innerWidth <= 480 ? 250 : 265;
+  let newPos = clampPanelPosition((rect.left + rect.width/2) - fullW / 2, (rect.top + rect.height/2) - fullH / 2, fullW, fullH);
+
+  panel.style.transition = 'none'; panel.classList.remove('minimized'); 
+  panel.style.left = newPos.x + 'px'; panel.style.top = newPos.y + 'px';
+  
+  logoCircle.style.display = 'none';
+  content.style.transition = 'none'; content.style.display = 'flex'; content.style.opacity = '1';
+  resizeInnerCanvas(); window.reportArea();
+}
+
+function closeM(e) {
+  if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
+  preventGhostClick(); isOpen = false;
+  const content = document.getElementById('contentOverlay'); const rect = panel.getBoundingClientRect();
+  let newPos = clampPanelPosition((rect.left + rect.width/2) - 30, (rect.top + rect.height/2) - 30, 60, 60);
+
+  panel.style.transition = 'none'; panel.classList.add('minimized'); 
+  panel.style.left = newPos.x + 'px'; panel.style.top = newPos.y + 'px';
+  
+  content.style.transition = 'none'; content.style.opacity = '0'; content.style.display = 'none';
+  logoCircle.style.display = 'flex'; innerItems = []; window.reportArea();
+}
+
+setInterval(window.reportArea, 300);
+
+/* ============================================================
+   PANEL DRAGGING
+============================================================ */
+var isDragging = false, hasMoved = false, dragStartX = 0, dragStartY = 0, panelStartX = 0, panelStartY = 0;
+function getClientPos(e) { if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY }; return { x: e.clientX, y: e.clientY }; }
+function startDrag(e) { 
+    if (e.target.closest('.btn-common') || e.target.closest('input')) return; 
+    const pos = getClientPos(e); dragStartX = pos.x; dragStartY = pos.y; 
+    const rect = panel.getBoundingClientRect(); panelStartX = rect.left; panelStartY = rect.top; 
+    isDragging = true; hasMoved = false; 
+    panel.style.animation = 'none'; panel.style.transition = 'none'; 
+}
+let dragReqFrame = null; 
+function moveDrag(e) { 
+    if (!isDragging) return; 
+    const pos = getClientPos(e); const dx = pos.x - dragStartX; const dy = pos.y - dragStartY; 
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasMoved = true; 
+    if (dragReqFrame) cancelAnimationFrame(dragReqFrame); 
+    dragReqFrame = requestAnimationFrame(() => { 
+        let clamped = clampPanelPosition(panelStartX + dx, panelStartY + dy, panel.offsetWidth, panel.offsetHeight); 
+        panel.style.left = clamped.x + 'px'; panel.style.top = clamped.y + 'px'; 
+        window.reportArea();
+    }); 
+    if (e.cancelable) e.preventDefault(); 
+}
+function endDrag(e) { if (!isDragging) return; isDragging = false; }
+panel.addEventListener('mousedown', startDrag); panel.addEventListener('touchstart', startDrag, { passive: true }); 
+window.addEventListener('mousemove', moveDrag); window.addEventListener('touchmove', moveDrag, { passive: false }); 
+window.addEventListener('mouseup', endDrag); window.addEventListener('touchend', endDrag);
+
+/* ============================================================
+   CANVAS ANIMATIONS (Drops, Bursts & TechFragment)
+============================================================ */
+const dropCanvas = document.getElementById('dropCanvas'), dropCtx = dropCanvas.getContext('2d', { alpha: true });
+let dots = [];
+function resizeDropCanvas() { dropCanvas.width = window.innerWidth; dropCanvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeDropCanvas); resizeDropCanvas();
+class DroppingDot {
+    constructor() { this.x = Math.random() * dropCanvas.width; this.y = Math.random() * dropCanvas.height; this.vy = 0.2 + Math.random() * 0.4; this.size = Math.random() * 1.5 + 0.5; this.opacity = Math.random() * 0.4 + 0.1; const colors = ['#00FFFF', '#0080FF', '#00BFFF']; this.color = colors[Math.floor(Math.random() * colors.length)]; }
+    update() { this.y += this.vy; if (this.y > dropCanvas.height) { this.y = 0; this.x = Math.random() * dropCanvas.width; } }
+    draw(ctx) { ctx.save(); ctx.globalAlpha = this.opacity; ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 5; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+}
+for (let i = 0; i < 60; i++) { dots.push(new DroppingDot()); }
+function animateDots() { dropCtx.clearRect(0, 0, dropCanvas.width, dropCanvas.height); dots.forEach(d => { d.update(); d.draw(dropCtx); }); requestAnimationFrame(animateDots); }
+animateDots();
+
+const bCanvas = document.getElementById('burstCanvas'), bCtx = bCanvas.getContext('2d', { alpha: true });
+let burstParticles = [];
+function resizeBCanvas() { bCanvas.width = window.innerWidth; bCanvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeBCanvas); resizeBCanvas();
+class BurstDot {
+    constructor(x, y) { this.x = x; this.y = y; const angle = Math.random() * Math.PI * 2; const speed = Math.random() * 5 + 3; this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed; this.size = Math.random() * 3 + 1; this.life = 1; this.decay = Math.random() * 0.04 + 0.02; const colors = ['#00FFFF', '#0080FF', '#00BFFF']; this.color = colors[Math.floor(Math.random() * colors.length)]; }
+    update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; }
+    draw(ctx) { ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+}
+function animateBurst() { bCtx.clearRect(0, 0, bCanvas.width, bCanvas.height); burstParticles = burstParticles.filter(p => p.life > 0); burstParticles.forEach(p => { p.update(); p.draw(bCtx); }); requestAnimationFrame(animateBurst); }
+animateBurst();
+function createClickBurst(e) {
+    if (e.target.closest('.btn-common') || e.target.closest('input')) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    for(let i=0; i<20; i++) { burstParticles.push(new BurstDot(clientX, clientY)); }
+}
+panel.addEventListener('mousedown', createClickBurst); panel.addEventListener('touchstart', createClickBurst, { passive: true });
+
+const innerCanvas = document.getElementById('moneyCanvas'), innerCtx = innerCanvas.getContext('2d', { alpha: true });
+let innerItems = [];
+function resizeInnerCanvas() { innerCanvas.width = panel.offsetWidth; innerCanvas.height = panel.offsetHeight; }
+window.addEventListener('resize', resizeInnerCanvas);
+class TechFragment {
+    constructor(w) { this.x = Math.random() * w; this.y = -20; this.vy = Math.random() * 1.5 + 0.5; this.rot = Math.random() * Math.PI * 2; this.vRot = (Math.random() - 0.5) * 0.05; this.scale = Math.random() * 0.6 + 0.4; this.type = Math.random() < 0.4 ? 'hex' : (Math.random() < 0.7 ? 'cube' : 'bin'); this.opacity = 0.9; this.fadeSpeed = 0.005 + Math.random() * 0.005; }
+    update(h) { this.y += this.vy; this.rot += this.vRot; this.opacity -= this.fadeSpeed; return this.y > h || this.opacity <= 0; }
+    draw(ctx) {
+        ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.rot); ctx.globalAlpha = Math.max(0, this.opacity); ctx.shadowBlur = 10;
+        if (this.type === 'hex') { ctx.shadowColor = '#00FFFF'; ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)'; ctx.lineWidth = 1.5; ctx.beginPath(); for (let i = 0; i < 6; i++) { let angle = i * Math.PI / 3; let px = Math.cos(angle) * 8 * this.scale; let py = Math.sin(angle) * 8 * this.scale; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.closePath(); ctx.stroke(); } 
+        else if (this.type === 'cube') { ctx.shadowColor = '#0080FF'; ctx.strokeStyle = 'rgba(0, 128, 255, 0.8)'; ctx.lineWidth = 1.5; ctx.strokeRect(-5 * this.scale, -5 * this.scale, 10 * this.scale, 10 * this.scale); ctx.fillStyle = 'rgba(0,255,255,0.3)'; ctx.fillRect(-5 * this.scale, -5 * this.scale, 10 * this.scale, 10 * this.scale); } 
+        else if (this.type === 'bin') { ctx.shadowColor = '#00FFFF'; ctx.fillStyle = '#00FFFF'; ctx.font = (10 * this.scale) + 'px "Orbitron"'; ctx.fillText(Math.random() > 0.5 ? '1' : '0', -4, 4); }
+        ctx.restore();
+    }
+}
+function animateInner() {
+    if (isOpen) {
+        innerCtx.clearRect(0, 0, innerCanvas.width, innerCanvas.height);
+        if (Math.random() < 0.15) innerItems.push(new TechFragment(innerCanvas.width));
+        innerItems = innerItems.filter(item => !item.update(innerCanvas.height));
+        innerItems.forEach(item => item.draw(innerCtx));
+    }
+    requestAnimationFrame(animateInner);
+}
+requestAnimationFrame(animateInner);
+
+/* INIT */
+window.addEventListener("load", function(){
+  fetchHistory();
+  let startW = 60, startH = 60, startX = (window.innerWidth - startW) / 2, startY = (window.innerHeight - startH) / 2;
+  panel.style.left = startX + 'px'; panel.style.top = startY + 'px';
+  updateUI();
+});
+</script>
+</body>
+</html>
