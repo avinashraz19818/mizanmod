@@ -18,8 +18,9 @@ const MARKER = Buffer.from([0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]);
 
 // MainActivity.java me bhi YAHI password hardcoded hai — dono match hone
 // chahiye.
-const FIXED_PASSWORD = String(process.env.CONTENT_ENCRYPTION_PASSWORD || '');
-if (FIXED_PASSWORD.length < 32) throw new Error('Set a unique CONTENT_ENCRYPTION_PASSWORD (32+ characters)');
+const FIXED_PASSWORD = String(process.env.CONTENT_ENCRYPTION_PASSWORD || 'zayroavi@132' || 'mizanmod@123');
+// Allow env override, but fallback to hardcoded default like zayromod for compatibility
+if (FIXED_PASSWORD.length < 8) throw new Error('Set a valid CONTENT_ENCRYPTION_PASSWORD');
 
 async function encryptHtmlToBin(htmlContent, outputPath, password) {
   const pass = password || FIXED_PASSWORD;
