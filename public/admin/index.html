@@ -979,6 +979,24 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
       </div>
       <button class="btn btn-primary" onclick="saveSettings()"><svg><use href="#i-check"/></svg> Save Settings</button>
     </div>
+    <div class="card" style="max-width:640px; border:1.5px solid rgba(255,80,80,.35)">
+      <div class="card-hd"><span class="accent" style="background:linear-gradient(90deg,#ff4d4d,#ff8a3d)"></span><h3>🔐 Admin Security — Change Password</h3></div>
+      <p style="font-size:12.5px;color:var(--dim);margin-bottom:14px;line-height:1.5">
+        Yahan se admin ka username aur password change kar sakte ho. Password change karte hi naya password turant active ho jayega aur .env file bhi auto-update ho jayegi.
+      </p>
+      <div class="form-group"><label>Current Admin Username</label><input type="text" id="admCurrentUser" placeholder="admin" value="admin" readonly style="opacity:.7;background:var(--bg-2)"></div>
+      <div class="form-group"><label>Current Password <span style="color:var(--danger)">*</span></label><input type="password" id="admOldPass" placeholder="Enter current admin password" autocomplete="current-password"></div>
+      <div class="grid2">
+        <div class="form-group"><label>New Username <small>(optional)</small></label><input type="text" id="admNewUser" placeholder="Leave empty to keep same"></div>
+        <div class="form-group"><label>New Password <span style="color:var(--danger)">*</span></label><input type="password" id="admNewPass" placeholder="Min 8 chars, strong" autocomplete="new-password"></div>
+      </div>
+      <div class="form-group"><label>Confirm New Password <span style="color:var(--danger)">*</span></label><input type="password" id="admConfirmPass" placeholder="Re-enter new password" autocomplete="new-password"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn btn-primary" id="admChangeBtn" onclick="changeAdminPassword()"><svg><use href="#i-check"/></svg> Change Admin Password</button>
+        <button class="btn btn-outline" onclick="document.getElementById('admOldPass').value='';document.getElementById('admNewPass').value='';document.getElementById('admConfirmPass').value='';document.getElementById('admNewUser').value='';">Clear</button>
+      </div>
+      <div id="admChangeMsg" style="margin-top:12px;font-size:13px;display:none;padding:10px;border-radius:8px"></div>
+    </div>
   </div>
 
   <!-- ANDROID PROJECT -->
@@ -2703,6 +2721,18 @@ async function loadSettings() {
   if (s.upi_qr_image) {
     document.getElementById('currentQr').innerHTML = `<img src="/api/files/${s.upi_qr_image}" style="width:110px;border-radius:10px;border:1px solid var(--border)">`;
   }
+  // Admin current username
+  try {
+    const me = await api('/api/me');
+    if (me && me.username) {
+      const el = document.getElementById('admCurrentUser');
+      if (el) el.value = me.username;
+    }
+    if (s.admin_username) {
+      const el = document.getElementById('admCurrentUser');
+      if (el) el.value = s.admin_username;
+    }
+  } catch(e) {}
 }
 
 async function saveSettings() {
@@ -2730,6 +2760,63 @@ async function saveSettings() {
   if (loadingHtmlFile) fd.append('loading_html', loadingHtmlFile);
   const d = await api('/api/admin/settings','POST',fd,true);
   setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('Settings saved!');
+}
+
+async function changeAdminPassword() {
+  const oldPass = document.getElementById('admOldPass').value;
+  const newPass = document.getElementById('admNewPass').value;
+  const confirmPass = document.getElementById('admConfirmPass').value;
+  const newUser = document.getElementById('admNewUser').value.trim();
+  const msgEl = document.getElementById('admChangeMsg');
+  const btn = document.getElementById('admChangeBtn');
+
+  msgEl.style.display = 'none';
+  if (!oldPass) { toast('Current password dalo', true); return; }
+  if (!newPass) { toast('New password dalo', true); return; }
+  if (newPass !== confirmPass) { toast('New password aur confirm match nahi kar raha', true); return; }
+  if (newPass.length < 8) { toast('New password kam se kam 8 characters ka hona chahiye', true); return; }
+
+  setLoading(btn, true, 'Changing…');
+  const d = await api('/api/admin/change-password', 'POST', {
+    oldPassword: oldPass,
+    newPassword: newPass,
+    confirmPassword: confirmPass,
+    newUsername: newUser
+  });
+  setLoading(btn, false);
+
+  if (d.error) {
+    msgEl.textContent = '❌ ' + d.error;
+    msgEl.style.display = 'block';
+    msgEl.style.background = 'rgba(255,80,80,.12)';
+    msgEl.style.color = '#ff6b6b';
+    msgEl.style.border = '1px solid rgba(255,80,80,.3)';
+    toast(d.error, true);
+    return;
+  }
+
+  msgEl.textContent = '✅ ' + (d.message || 'Password changed! Naye password se dobara login karna padega.');
+  msgEl.style.display = 'block';
+  msgEl.style.background = 'rgba(80,255,140,.12)';
+  msgEl.style.color = '#50ff8c';
+  msgEl.style.border = '1px solid rgba(80,255,140,.3)';
+  toast('Admin password change ho gaya!');
+
+  // Clear fields
+  document.getElementById('admOldPass').value = '';
+  document.getElementById('admNewPass').value = '';
+  document.getElementById('admConfirmPass').value = '';
+  document.getElementById('admNewUser').value = '';
+
+  // 2 sec baad logout ka option
+  setTimeout(() => {
+    if (confirm('Password change ho gaya! Ab naye password se login karna padega. Logout karein?')) {
+      window.location.href = '/admin/';
+    }
+  }, 1500);
+}
   if (d.error) return toast(d.error, true);
   toast('✓ Settings saved!');
 }

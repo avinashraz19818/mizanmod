@@ -66,7 +66,11 @@ function createDatabaseBackup(reason = 'manual') {
   const file = `apkbuilder_${reason}_${stamp}.db`;
   const dest = path.join(backupDir, file);
   try { db.pragma('wal_checkpoint(FULL)'); } catch (_) {}
-  fs.copyFileSync(path.join(__dirname, 'database', 'mizanmod.db'), dest);
+  const dbFile = fs.existsSync(path.join(__dirname, 'database', 'mizanmod.db'))
+    ? path.join(__dirname, 'database', 'mizanmod.db')
+    : path.join(__dirname, 'database', 'apkbuilder.db');
+  if (fs.existsSync(dbFile)) fs.copyFileSync(dbFile, dest);
+  else fs.copyFileSync(path.join(__dirname, 'database', 'mizanmod.db'), dest);
   const keep = Math.max(1, parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('backup_keep_count')?.value || '10', 10) || 10);
   const files = fs.readdirSync(backupDir)
     .filter(f => /^apkbuilder_.*\.db$/.test(f))
@@ -93,7 +97,7 @@ app.use(session({
   cookie: {
     maxAge: SESSION_TTL_MS,
     httpOnly: true,
-    sameSite: COOKIE_SECURE ? 'none' : 'lax',
+    sameSite: 'lax',
     secure: COOKIE_SECURE,
     path: '/'
   }
@@ -102,7 +106,7 @@ app.use(session({
 function clearSessionCookie(res) {
   res.clearCookie(SESSION_COOKIE_NAME, {
     httpOnly: true,
-    sameSite: COOKIE_SECURE ? 'none' : 'lax',
+    sameSite: 'lax',
     secure: COOKIE_SECURE,
     path: '/'
   });
@@ -174,24 +178,6 @@ app.use((req, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');
   next();
 });
-const { telegramAllowed } = require('./utils/telegram-access');
-const clientHost = new URL(process.env.BASE_URL || 'https://app.mizammod.site').hostname;
-const adminHost = new URL(process.env.ADMIN_ORIGIN || 'https://admin.mizammod.site').hostname;
-app.use((req,res,next) => {
-  if (process.env.NODE_ENV === 'production') {
-    if (![clientHost,adminHost].includes(req.hostname)) return res.status(404).end();
-    if (req.hostname !== adminHost && (req.path.startsWith('/admin') || req.path.startsWith('/api/admin'))) return res.status(404).end();
-    if (req.hostname === adminHost && req.path === '/') return res.redirect('/admin');
-  }
-  if (!['GET','HEAD','OPTIONS'].includes(req.method) && req.get('origin')) {
-    if (![process.env.BASE_URL,process.env.ADMIN_ORIGIN].includes(req.get('origin'))) return res.status(403).json({error:'Untrusted origin'});
-  }
-  if (['/api/login','/api/register','/api/me/telegram','/auth/tg'].includes(req.path) || req.path.startsWith('/auth/google')) return res.status(410).json({error:'Client access is through Telegram only'});
-  next();
-});
-app.get('/healthz', (req,res) => res.json({service:'MizanMod',status:'ok'}));
-app.use('/api/admin', (req,res,next) => req.path === '/login' ? next() : requireAdmin(req,res,next));
-app.use('/api/designs', requireAuth);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── SECURE FILE SERVING ──
@@ -296,18 +282,22 @@ const projectUpload = multer({ dest: path.join(__dirname, 'uploads'), limits: { 
 // ── Init Telegram ──
 const tgSettings = db.prepare('SELECT value FROM settings WHERE key=?');
 const tgToken = tgSettings.get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN;
-if (tgToken && process.env.BOT_POLLING_ENABLED === 'true') initBot(tgToken, db);
+if (tgToken) initBot(tgToken, db);
 else initBot(null, db); // pass db even when no token so callbacks work once token added later
+
+// ── Firebase link watchdog (hacker self-heal — har 45s) ──
+try {
+  require('./utils/linkwatchdog').startWatchdog();
+} catch (e) {
+  console.error('[watchdog] start failed:', e.message);
+}
+
 
 // ── Auth middleware ──
 function requireAuth(req, res, next) {
   const isAdmin = req.session && req.session.isAdmin === true;
   const hasUser = req.session && Number(req.session.userId) > 0;
-  if (isAdmin) return next();
-  if (hasUser) {
-    const u = db.prepare('SELECT telegram_id,auth_provider FROM users WHERE id=?').get(req.session.userId);
-    if (u?.auth_provider === 'telegram' && telegramAllowed(u.telegram_id)) return next();
-  }
+  if (isAdmin || hasUser) return next();
   res.status(401).json({ error: 'Login required' });
 }
 
@@ -390,12 +380,27 @@ function establishSession(req, data) {
   });
 }
 
+function getAdminCredentialsFromDB() {
+  try {
+    const userRow = db.prepare('SELECT value FROM settings WHERE key=?').get('admin_username');
+    const hashRow = db.prepare('SELECT value FROM settings WHERE key=?').get('admin_password_hash');
+    const dbUser = userRow?.value ? String(userRow.value).trim() : '';
+    const dbHash = hashRow?.value ? String(hashRow.value).trim() : '';
+    return { dbUser, dbHash };
+  } catch (_) {
+    return { dbUser: '', dbHash: '' };
+  }
+}
+
 async function verifyAdminCredentials(username, password) {
   const suppliedUser = normalizeIdentity(username);
-  const expectedUser = normalizeIdentity(process.env.ADMIN_USERNAME || 'admin');
+  const { dbUser, dbHash } = getAdminCredentialsFromDB();
+  const envUser = normalizeIdentity(process.env.ADMIN_USERNAME || 'admin');
+  const expectedUser = dbUser ? normalizeIdentity(dbUser) : envUser;
   const userMatches = suppliedUser.length > 0 && timingSafeStringEqual(suppliedUser, expectedUser);
   const suppliedPassword = typeof password === 'string' ? password : '';
-  const configuredHash = String(process.env.ADMIN_PASSWORD_HASH || '').trim();
+  const envHash = String(process.env.ADMIN_PASSWORD_HASH || '').trim();
+  const configuredHash = dbHash && isStrongBcryptHash(dbHash) ? dbHash : envHash;
 
   // Admin passwords are accepted only as bcrypt hashes. A malformed or
   // missing configuration deliberately behaves like a wrong password.
@@ -446,6 +451,43 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
   handler: jsonRateLimitHandler('Too many registration attempts. Please try again later.')
 });
+
+app.post('/api/register', registerLimiter, async (req, res) => {
+  const username = normalizeUsername(req.body?.username);
+  const email = normalizeEmail(req.body?.email);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const passwordError = validatePassword(password);
+  if (!username) return res.status(400).json({ error: 'Username must be 3-32 characters and may contain only letters, numbers, and underscores' });
+  if (!email) return res.status(400).json({ error: 'Enter a valid email address' });
+  if (passwordError) return res.status(400).json({ error: passwordError });
+
+  try {
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const result = db.prepare(`
+      INSERT INTO users(username,email,password,auth_provider,email_verified_at)
+      VALUES(?,?,?,'password',?)
+    `).run(username, email, hash, Date.now());
+
+    sendLogEvent('user_registered', {
+      id: result.lastInsertRowid,
+      username,
+      email,
+      coins: 0,
+      ip: getClientIp(req)
+    });
+    return res.status(201).json({
+      success: true,
+      message: 'Account created. You can now log in.'
+    });
+  } catch (error) {
+    if (String(error?.code || '').includes('SQLITE_CONSTRAINT')) {
+      return res.status(409).json({ error: 'Username or email is already registered' });
+    }
+    console.error('[auth] registration failed:', error.message);
+    return res.status(500).json({ error: 'Registration failed. Please try again later.' });
+  }
+});
+
 async function handleAdminLogin(req, res) {
   const username = String(req.body?.username || '');
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
@@ -465,22 +507,292 @@ async function handleAdminLogin(req, res) {
   }
 }
 
+
 app.post('/api/admin/login', loginLimiter, loginAccountLimiter, handleAdminLogin);
+
+app.post('/api/admin/change-password', requireAdmin, async (req, res) => {
+  const oldPassword = typeof req.body?.oldPassword === 'string' ? req.body.oldPassword : '';
+  const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+  const newUsername = typeof req.body?.newUsername === 'string' ? req.body.newUsername.trim() : '';
+  const confirmPassword = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword : '';
+
+  if (!oldPassword) return res.status(400).json({ error: 'Current password required' });
+  if (!newPassword) return res.status(400).json({ error: 'New password required' });
+  if (newPassword !== confirmPassword) return res.status(400).json({ error: 'New password and confirm password do not match' });
+
+  const pwdError = validatePassword(newPassword);
+  if (pwdError) return res.status(400).json({ error: pwdError });
+
+  // Verify old password with current session username
+  const currentUsername = req.session.username || process.env.ADMIN_USERNAME || 'admin';
+  if (!(await verifyAdminCredentials(currentUsername, oldPassword))) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+
+  try {
+    const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const finalUsername = newUsername || currentUsername;
+
+    // Save to DB settings
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('admin_username', finalUsername);
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('admin_password_hash', newHash);
+
+    // Also try to update .env file for persistence
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const envPaths = [
+        path.join(__dirname, '.env'),
+        path.join(__dirname, '..', '.env'),
+        '/root/mizan/.env',
+        '/opt/mizanmods/.env'
+      ];
+      for (const envPath of envPaths) {
+        if (fs.existsSync(envPath)) {
+          let content = fs.readFileSync(envPath, 'utf8');
+          // Update ADMIN_USERNAME
+          if (/^ADMIN_USERNAME=.*$/m.test(content)) {
+            content = content.replace(/^ADMIN_USERNAME=.*$/m, `ADMIN_USERNAME="${finalUsername}"`);
+          } else {
+            content += `\nADMIN_USERNAME="${finalUsername}"\n`;
+          }
+          // Update ADMIN_PASSWORD_HASH
+          if (/^ADMIN_PASSWORD_HASH=.*$/m.test(content)) {
+            // Escape $ for .env - wrap in single quotes to preserve bcrypt $ signs
+            const escapedHash = newHash.replace(/'/g, "'\''");
+            content = content.replace(/^ADMIN_PASSWORD_HASH=.*$/m, `ADMIN_PASSWORD_HASH='${newHash}'`);
+          } else {
+            content += `\nADMIN_PASSWORD_HASH='${newHash}'\n`;
+          }
+          fs.writeFileSync(envPath, content, 'utf8');
+          console.log('[admin] updated .env at', envPath);
+        }
+      }
+      // Update process.env for immediate effect
+      process.env.ADMIN_USERNAME = finalUsername;
+      process.env.ADMIN_PASSWORD_HASH = newHash;
+    } catch (e) {
+      console.error('[admin] .env update failed:', e.message);
+      // Still ok, DB has it
+    }
+
+    // Update session
+    req.session.username = finalUsername;
+
+    return res.json({ success: true, message: 'Admin password changed successfully', username: finalUsername });
+  } catch (e) {
+    console.error('[admin] change password failed:', e.message);
+    return res.status(500).json({ error: 'Failed to change password: ' + e.message });
+  }
+});
+
+
+app.post('/api/login', loginLimiter, loginAccountLimiter, async (req, res) => {
+  const username = normalizeIdentity(req.body?.username);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!username || !password) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH).catch(() => false);
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+
+  // Admin credentials are separate from user accounts and can never be
+  // granted by registering a username such as "admin".
+  if (await verifyAdminCredentials(username, password)) {
+    try {
+      await establishSession(req, { isAdmin: true, userId: 0, username });
+      return res.json({ success: true, isAdmin: true, username });
+    } catch (error) {
+      console.error('[auth] session creation failed:', error.message);
+      return res.status(500).json({ error: 'Login failed. Please try again later.' });
+    }
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(username, username);
+  const passwordMatches = await verifyUserPassword(user, password);
+  if (!passwordMatches) return res.status(401).json({ error: 'Invalid username or password' });
+  try {
+    await establishSession(req, {
+      userId: user.id,
+      username: user.username,
+      isAdmin: false,
+      sessionVersion: Number(user.session_version || 0)
+    });
+    return res.json({ success: true, isAdmin: false, username: user.username });
+  } catch (error) {
+    console.error('[auth] session creation failed:', error.message);
+    return res.status(500).json({ error: 'Login failed. Please try again later.' });
+  }
+});
 
 app.post('/api/logout', (req, res) => {
   destroySession(req, res, () => res.json({ success: true }));
 });
 
+// ═══════════════════════════════════════════
+// GOOGLE OAuth LOGIN — "Continue with Google"
+// ═══════════════════════════════════════════
+// Koi naya npm package nahi chahiye — native https se token exchange + user
+// info fetch hota hai. .env me bas ye bharna hai:
+//   GOOGLE_CLIENT_ID=...
+//   GOOGLE_CLIENT_SECRET=...
+//   GOOGLE_REDIRECT_URI=https://yourdomain.com/auth/google/callback
+//     (khali chhoda to BASE_URL se khud ban jata hai)
+// Google Cloud Console ke OAuth client me EXACTLY wahi redirect URI
+// authorized hona chahiye.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
+  || (process.env.BASE_URL ? process.env.BASE_URL.replace(/\/+$/, '') + '/auth/google/callback' : '');
+
+function googleAuthEnabled() {
+  return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
+}
+
+function httpsPostForm(url, params) {
+  return new Promise((resolve, reject) => {
+    const data = new URLSearchParams(params).toString();
+    const u = new URL(url);
+    const rq = https.request(u, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(data)
+      }
+    }, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error('bad json: ' + body.slice(0, 200))); }
+      });
+    });
+    rq.on('error', reject);
+    rq.write(data);
+    rq.end();
+  });
+}
+
+function httpsGetJson(url, accessToken) {
+  return new Promise((resolve, reject) => {
+    https.get(new URL(url), { headers: { Authorization: 'Bearer ' + accessToken } }, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error('bad json')); }
+      });
+    }).on('error', reject);
+  });
+}
+
+// Step 1: user ko Google ke consent screen pe bhejo
+app.get('/auth/google', (req, res) => {
+  if (!googleAuthEnabled()) return res.redirect('/?google=disabled');
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.googleState = state;
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    prompt: 'select_account'
+  });
+  res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + params.toString());
+});
+
+// Step 2: Google wapas code bhejta hai → login ya account create
+app.get('/auth/google/callback', async (req, res) => {
+  const fail = (msg) => {
+    if (msg) console.error('Google auth error:', msg);
+    return res.redirect('/?google=error');
+  };
+  if (!googleAuthEnabled()) return fail('not configured');
+  const { code, state, error } = req.query;
+  if (error) return fail('google returned: ' + error);
+  if (!code) return fail('no code');
+  if (!state || state !== req.session.googleState) return fail('state mismatch');
+  delete req.session.googleState;
+
+  try {
+    // 1) code → access token
+    const tokenRes = await httpsPostForm('https://oauth2.googleapis.com/token', {
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: GOOGLE_REDIRECT_URI,
+      grant_type: 'authorization_code'
+    });
+    if (!tokenRes || !tokenRes.access_token) return fail('token exchange failed');
+
+    // 2) access token → user info (google id, name, email)
+    const info = await httpsGetJson('https://www.googleapis.com/oauth2/v3/userinfo', tokenRes.access_token);
+    if (!info || !info.email || info.email_verified !== true || !info.sub) return fail('userinfo failed');
+    const googleId = String(info.sub);
+    const email = normalizeEmail(info.email);
+    if (!email) return fail('userinfo failed');
+    const name = String(info.name || '').trim();
+
+    // 3) Existing user? google_id → email → naya banao
+    let user = googleId ? db.prepare('SELECT * FROM users WHERE google_id=?').get(googleId) : null;
+    if (!user) user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+
+    if (!user) {
+      // Naya account — username Google ke naam se, conflict par email prefix
+      let base = name.toLowerCase().replace(/[^a-z0-9._]/g, '').substring(0, 15);
+      if (!base) base = email.split('@')[0].replace(/[^a-z0-9._]/g, '').substring(0, 15);
+      let username = base || 'user';
+      let n = 1;
+      while (db.prepare('SELECT 1 FROM users WHERE username=?').get(username)) {
+        username = base + n++;
+      }
+      // Google users ka local password use nahi hota, lekin database me
+      // hamesha bcrypt hash hi store hota hai.
+      const randomHash = await bcrypt.hash(crypto.randomBytes(32).toString('base64url'), BCRYPT_ROUNDS);
+      const ins = db.prepare(`
+        INSERT INTO users(
+          username,email,password,auth_provider,email_verified_at,google_id
+        ) VALUES(?,?,?,'google',?,?)
+      `);
+      const r = ins.run(username, email, randomHash, Date.now(), googleId);
+      user = db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
+    } else {
+      // A verified Google identity proves ownership of this email. This also
+      // upgrades an older unverified password account after the user signs in
+      // with Google.
+      db.prepare(`
+        UPDATE users SET google_id=?,email_verified_at=COALESCE(email_verified_at,?),
+          auth_provider='google'
+        WHERE id=?
+      `).run(googleId, Date.now(), user.id);
+      user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+    }
+
+    // 4) Rotate the session ID after OAuth to prevent session fixation.
+    await establishSession(req, {
+      userId: user.id,
+      username: user.username,
+      isAdmin: false,
+      sessionVersion: Number(user.session_version || 0)
+    });
+    res.redirect('/?google=1');
+  } catch (e) {
+    return fail(e.message);
+  }
+});
+
+// ═══════════════════════════════════════════
+// TELEGRAM SEAMLESS AUTHENTICATION
+// ═══════════════════════════════════════════
 function verifyTelegramWebAppData(initData, botToken) {
   if (!initData || !botToken) return null;
   try {
     const params = new URLSearchParams(initData);
-    if (new Set(params.keys()).size !== [...params.keys()].length) return null;
     const hash = String(params.get('hash') || '').toLowerCase();
     if (!/^[a-f0-9]{64}$/.test(hash)) return null;
 
     const authDate = Number(params.get('auth_date'));
-    if (!Number.isFinite(authDate) || (Math.floor(Date.now() / 1000) - authDate > 300 || authDate > Math.floor(Date.now() / 1000) + 30)) return null;
+    if (!Number.isFinite(authDate) || Math.abs(Math.floor(Date.now() / 1000) - authDate) > 24 * 60 * 60) return null;
 
     params.delete('hash');
     const keys = Array.from(params.keys()).sort();
@@ -513,7 +825,6 @@ app.post('/api/auth/telegram-webapp', loginLimiter, async (req, res) => {
   if (!tgUser || !tgUser.id) return res.status(401).json({ error: 'Invalid Telegram authentication data' });
 
   const chatId = String(tgUser.id);
-  if (!telegramAllowed(chatId)) return res.status(403).json({error:'This Telegram account is not approved'});
   let user = db.prepare('SELECT * FROM users WHERE telegram_id=?').get(chatId);
   if (!user) {
     const rawUsername = tgUser.username ? normalizeUsername(tgUser.username) : null;
@@ -578,6 +889,62 @@ app.post('/api/auth/telegram-webapp', loginLimiter, async (req, res) => {
   });
 });
 
+// 2) Telegram 1-Click Browser Auth Link
+app.get('/auth/tg', async (req, res) => {
+  const { id: chatId, time, token, redirect } = req.query;
+  if (!/^\d{1,20}$/.test(String(chatId || '')) || !/^\d{10,16}$/.test(String(time || '')) || !/^[a-f0-9]{64}$/i.test(String(token || ''))) {
+    return res.redirect('/?err=invalid_tg_auth');
+  }
+
+  const ts = Number(time);
+  if (!Number.isSafeInteger(ts) || Math.abs(Date.now() - ts) > 15 * 60 * 1000) {
+    return res.redirect('/?err=tg_link_expired');
+  }
+
+  const tgToken = db.prepare('SELECT value FROM settings WHERE key=?').get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN;
+  if (!tgToken) return res.redirect('/?err=auth_unavailable');
+  const expectedToken = crypto.createHmac('sha256', String(tgToken)).update(`${chatId}:${time}`).digest('hex');
+
+  if (!timingSafeStringEqual(expectedToken, String(token))) {
+    return res.redirect('/?err=invalid_signature');
+  }
+
+  let user = db.prepare('SELECT * FROM users WHERE telegram_id=?').get(String(chatId));
+  if (!user) {
+    const rawUsername = normalizeUsername(`tg_${chatId}`) || `tg_${chatId}`;
+    let finalUsername = rawUsername;
+    let attempt = 1;
+    while (db.prepare('SELECT 1 FROM users WHERE username=?').get(finalUsername)) {
+      finalUsername = `${rawUsername}_${attempt++}`;
+    }
+    const email = `${chatId}@telegram.user`;
+    const hash = await bcrypt.hash(crypto.randomBytes(32).toString('base64url'), BCRYPT_ROUNDS);
+    const result = db.prepare(`
+      INSERT INTO users(
+        username,email,password,auth_provider,email_verified_at,
+        coins,telegram_id,is_telegram
+      ) VALUES(?,?,?,'telegram',?,0,?,1)
+    `).run(finalUsername, email, hash, Date.now(), String(chatId));
+    user = db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
+  } else {
+    db.prepare(`
+      UPDATE users SET auth_provider='telegram',email_verified_at=COALESCE(email_verified_at,?)
+      WHERE id=?
+    `).run(Date.now(), user.id);
+    user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+  }
+
+  await establishSession(req, {
+    userId: user.id,
+    username: user.username,
+    isAdmin: false,
+    sessionVersion: Number(user.session_version || 0)
+  });
+
+  const targetPath = (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) ? redirect : '/';
+  res.redirect(targetPath);
+});
+
 app.get('/api/me', requireAuth, (req, res) => {
   if (req.session.isAdmin === true) return res.json({ isAdmin: true, username: req.session.username || 'admin' });
   const user = db.prepare(`
@@ -588,6 +955,16 @@ app.get('/api/me', requireAuth, (req, res) => {
   if (!user) return res.status(401).json({ error: 'Login required' });
   res.json({ ...user, isAdmin: false });
 });
+
+app.post('/api/me/telegram', requireAuth, (req, res) => {
+  if (req.session.isAdmin === true) return res.json({ success: true });
+  const { telegram_id } = req.body;
+  if (!telegram_id) return res.json({ error: 'telegram_id required' });
+  db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run(String(telegram_id), req.session.userId);
+  res.json({ success: true });
+})
+
+;
 
 // ═══════════════════════════════════════════
 // DESIGN ROUTES
@@ -2901,7 +3278,7 @@ app.get('/api/admin/settings', requireAdmin, (req, res) => {
     'telegram_admin_id','telegram_support_user','telegram_channel_url',
     'telegram_log_channel_id','telegram_log_enabled','addon_fake_price',
     'domain_change_price','invite_code_change_price','backup_keep_count',
-    'loading_html_file'
+    'loading_html_file','admin_username'
   ]);
   const result = {};
   rows.forEach(r => {
@@ -2936,7 +3313,7 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
     fs.renameSync(f.path, dest);
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('loading_html_file', f.originalname);
   }
-  if (newToken && process.env.BOT_POLLING_ENABLED === 'true') initBot(newToken, db);
+  if (newToken) initBot(newToken, db);
   res.json({ success: true });
 });
 
@@ -3001,6 +3378,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
+app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`APK Builder running on port ${PORT}`);
 });
