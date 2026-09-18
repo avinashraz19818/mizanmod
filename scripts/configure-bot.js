@@ -1,6 +1,6 @@
 'use strict';
 // Cosmetic Bot API changes only. No webhook, polling or access-policy changes.
-require('dotenv').config({path:require('node:path').join(__dirname,'../.env')});
+require('dotenv').config({path:require('node:path').join(__dirname,'../.env'), override: true});
 (async()=>{
   const Database=require('better-sqlite3'),path=require('node:path');
   const db=new Database(path.join(__dirname,'../database/mizanmod.db'),{readonly:true,fileMustExist:true});
