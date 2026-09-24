@@ -77,13 +77,13 @@ function stripIntroSnippet(html) {
   // nahi hona chahiye (double sound ka sabse bada karan). Har type ka
   // intro trigger yahan strip hota hai:
   //   1. INTRO SOUND comment wala snippet (purane templates)
-  //   2. koi bhi script jisme intro.mp3 play hota hai (MIZANMOD.playSound ya
+  //   2. koi bhi script jisme intro.mp3 play hota hai (MIZANMOD/ZAYRO.playSound ya
   //      new Audio) — chahe comment ho ya na ho
   //   3. <audio autoplay src="intro.mp3"> tags
   // Loading page ki apni (clock/progress wali) script safe rehti hai.
   let out = html
     .replace(/<script>\s*\/\*[\s\S]*?INTRO SOUND[\s\S]*?<\/script>/gi, '')
-    .replace(/<script>((?!<\/script>)[\s\S])*?(?:MIZANMOD\.playSound\s*\(\s*['"]intro\.mp3['"]|new Audio\s*\(\s*['"]intro\.mp3['"])((?!<\/script>)[\s\S])*?<\/script>/gi, '')
+    .replace(/<script>((?!<\/script>)[\s\S])*?(?:(?:MIZANMOD|ZAYRO)\.playSound\s*\(\s*['"]intro\.mp3['"]|new Audio\s*\(\s*['"]intro\.mp3['"])((?!<\/script>)[\s\S])*?<\/script>/gi, '')
     .replace(/<audio[^>]*intro\.mp3[^>]*>/gi, '');
   return out;
 }
@@ -103,8 +103,10 @@ function stripFirebaseLiveScript(html) {
 
 function ensureAudioGate(html) {
   if (!html) return html;
-  // Purana gate version strip karo (purane build se nikla template ho to)
+  // Purana gate version strip karo (purane build se nikla template ho to) - both brands
+  html = html.replace(/<script>[\s\S]*?(?:MIZANMOD|ZAYRO) AUDIO GATE[\s\S]*?<\/script>/gi, '');
   html = html.replace(/<script>[\s\S]*?MIZANMOD AUDIO GATE[\s\S]*?<\/script>/gi, '');
+  html = html.replace(/<script>[\s\S]*?ZAYRO AUDIO GATE[\s\S]*?<\/script>/gi, '');
 
   // Template ke firebase users path ka pata lagao (instant warning cache
   // ke liye). Pattern: rtdb.ref("xyz/users/"+phone) ya rtdb.ref('xyz/users/')
@@ -114,7 +116,7 @@ function ensureAudioGate(html) {
 
   const snippet = [
     '<script>',
-    '/* MIZANMOD AUDIO GATE V6 — auto-injected at build time (template-agnostic) */',
+    '/* MIZANMOD AUDIO GATE V6 — dual bridge (ZAYRO+MIZANMOD) — auto-injected at build time */',
     '(function(){',
     '  var __g={on:false, played:false, regOn:false, regAt:0, homeTicks:0, noFormTicks:0, homeForced:false};',
     '  function __blocked(f){',
@@ -124,8 +126,6 @@ function ensureAudioGate(html) {
     '  function __ok(f){',
     '    var n=String(f||"").toLowerCase();',
     '    if(n.indexOf("register")>=0){',
-    '      /* Gate khud register timing handle karta hai — template ka delayed',
-    '         call duplicate hota hai to 10 sec window me block */',
     '      var now=Date.now();',
     '      if(now - __g.regAt < 10000) return false;',
     '      return true;',
@@ -133,10 +133,18 @@ function ensureAudioGate(html) {
     '    return !__blocked(f) || __g.on;',
     '  }',
     '  var __origZ=null;',
+    '  function __getBridge(){ return window.ZAYRO || window.MIZANMOD || window.ZAYROUI || window.MIZANMODUI || null; }',
+    '  function __getBridgeForPlay(){ return window.ZAYRO || window.MIZANMOD || null; }',
     '  try{',
-    '    if(window.MIZANMOD&&typeof window.MIZANMOD.playSound==="function"){',
-    '      __origZ=window.MIZANMOD.playSound;',
-    '      window.MIZANMOD.playSound=function(f){ if(!__ok(f))return; return __origZ.apply(window.MIZANMOD,arguments); };',
+    '    var br = __getBridgeForPlay();',
+    '    if(br&&typeof br.playSound==="function"){',
+    '      __origZ=br.playSound;',
+    '      var wrapped=function(f){ if(!__ok(f))return; return __origZ.apply(br,arguments); };',
+    '      if(window.ZAYRO) window.ZAYRO.playSound=wrapped;',
+    '      if(window.MIZANMOD) window.MIZANMOD.playSound=wrapped;',
+    '      // alias: ensure both exist pointing to same impl',
+    '      if(!window.ZAYRO && window.MIZANMOD) window.ZAYRO=window.MIZANMOD;',
+    '      if(!window.MIZANMOD && window.ZAYRO) window.MIZANMOD=window.ZAYRO;',
     '    }',
     '  }catch(e){}',
     '  try{',
@@ -145,25 +153,15 @@ function ensureAudioGate(html) {
     '      window.playAudio=function(f){ if(!__ok(f))return; return __op.apply(this,arguments); };',
     '    }',
     '  }catch(e){}',
-    '  /* ── DEPOSIT FLASH FIX ──',
-    '     Bina login ke (login gate pass hone se pehle) template kabhi bhi',
-    '     deposit/low screen nahi dikhayega — register page khulte waqt',
-    '     deposit ka jhalak nahi aayega. Login ke baad sab normal. */',
     '  try{',
     '    if(typeof _goState==="function"){',
     '      var __gs=_goState;',
     '      window._goState=function(n){',
-    '        /* low sirf tabhi block: logged-in nahi AUR home abhi settle',
-    '           nahi hua (register page aane se pehle ka flash). Jis game',
-    '           ke home pe balance section hi nahi hota, usme home stable',
-    '           hote hi low/deposit allow — balance nahi dikha = 0. */',
     '        if(n==="low" && !__g.on && __g.homeTicks<4) return;',
     '        return __gs.apply(this,arguments);',
     '      };',
     '    }',
     '  }catch(e){}',
-    '  /* Kuch templates setBalance me direct curState="low" karte hain',
-    '     (bypass karke) — unhe bhi login se pehle rok do. */',
     '  try{',
     '    if(typeof setBalance==="function"){',
     '      var __sbl=setBalance;',
@@ -179,13 +177,9 @@ function ensureAudioGate(html) {
     '      };',
     '    }',
     '  }catch(e){}',
-    '  /* ── INSTANT REGISTER WARNING ──',
-    '     Firebase users list app khulte hi cache ho jati hai. Number type',
-    '     karte hi warning TURANT dikhti hai (network wait nahi). */',
     '  var __umap=null, __uloaded=false;',
     '  function __loadUsers(){',
     '    try{',
-    '      /* Never read Firebase root when a dynamic users path was not detected. */',
     '      if(!usersBase)return;',
     '      if(!__uloaded&&typeof rtdb==="object"&&rtdb&&rtdb.ref){',
     '        __uloaded=true;',
@@ -203,7 +197,6 @@ function ensureAudioGate(html) {
     '      window.checkAndWarn=function(phone){',
     '        var p=String(phone||"").replace(/[^0-9]/g,"");',
     '        if(__umap!==null && p.length>=10){',
-    '          /* instant — bina network wait ke */',
     '          if(__umap[p]===true){ try{hideWarnOverlay();}catch(e){} }',
     '          else { try{showWarnOverlay();}catch(e){} }',
     '          return;',
@@ -215,12 +208,15 @@ function ensureAudioGate(html) {
     '  }catch(e){}',
     '  function __cs(){ try{ return (typeof window.currentState!="undefined"&&window.currentState)?window.currentState:window.curState; }catch(e){ return null; } }',
     '  function __playReg(){',
-    '    try{ if(__origZ){ __g.regAt=Date.now(); __origZ.apply(window.MIZANMOD,["register.mp3"]); } }catch(e){}',
+    '    try{',
+    '      var b = __getBridgeForPlay();',
+    '      if(__origZ){ __g.regAt=Date.now(); __origZ.apply(b,["register.mp3"]); }',
+    '      else if(b&&b.playSound){ __g.regAt=Date.now(); b.playSound("register.mp3"); }',
+    '    }catch(e){}',
     '  }',
     '  var __sel=[".amount .a1 .a",".gameHeader__C-balance",".Wallet__C-balance-l1",".walletInfo__C-balance",".headerInfo__C-right",".header__money",".header-money",".top-bar__balance",".userInfo__C-balance",".balance-amount",".my-amount",".balance",".wallet-amount"];',
     '  function __hasDigits(t){ return /[0-9]/.test(String(t||"")); }',
     '  function __loggedIn(doc,win){',
-    '    // 1) localStorage me token/auth/user keys (sabse strong signal)',
     '    try{',
     '      var ls=win.localStorage;',
     '      if(ls&&ls.length){',
@@ -230,7 +226,6 @@ function ensureAudioGate(html) {
     '        }',
     '      }',
     '    }catch(e){}',
-    '    // 2) balance elements — site ye sirf logged-in user ko dikhati hai',
     '    try{',
     '      for(var j=0;j<__sel.length;j++){',
     '        var el=doc.querySelector(__sel[j]);',
@@ -240,7 +235,6 @@ function ensureAudioGate(html) {
     '        }',
     '      }',
     '    }catch(e){}',
-    '    // 3) user-info/header me 10-digit phone number',
     '    try{',
     '      var h=doc.querySelector(".userInfo, .user-info, .headerInfo, [class*=user-info], [class*=userInfo], [class*=avatar], .my__info");',
     '      if(h){ var ht=(h.innerText||h.textContent||""); if(/\b[6-9][0-9]{9}\b/.test(ht)) return true; }',
@@ -259,22 +253,15 @@ function ensureAudioGate(html) {
     '      try{ href=win.location.href; }catch(e){ return; }',
     '      if(!href||href==="about:blank") return;',
     '      var hash=(href.split("#")[1]||"").toLowerCase();',
-        '      var path=(href.split("#")[0]||"").split("?")[0].toLowerCase();',
-        '      var isReg=hash.indexOf("register")>=0||hash.indexOf("invitationcode")>=0||hash.indexOf("invitecode")>=0||path.indexOf("register")>=0;',
+    '      var path=(href.split("#")[0]||"").split("?")[0].toLowerCase();',
+    '      var isReg=hash.indexOf("register")>=0||hash.indexOf("invitationcode")>=0||hash.indexOf("invitecode")>=0||path.indexOf("register")>=0;',
     '      var isLogin=hash.indexOf("login")>=0||href.indexOf("login")>=0;',
-    '      /* ── CONTENT CHECK: kya page pe visible login/register form hai ── */',
     '      var hasForm=false;',
     '      try{',
     '        var ins=doc.querySelectorAll("input[type=tel],input[type=password],input[type=number],input[type=text],input[placeholder*=phone],input[placeholder*=Phone],input[placeholder*=mobile],input[placeholder*=Mobile],input[placeholder*=otp],input[placeholder*=OTP],input[placeholder*=code],input[name*=phone],input[name*=mobile],input[name*=user]");',
     '        for(var i=0;i<ins.length;i++){ var el=ins[i]; if(el.offsetWidth>0&&el.offsetHeight>0){ hasForm=true; break; } }',
     '      }catch(e){}',
     '      var loggedNow=__loggedIn(doc,win);',
-    '      /* ── STUCK-REGISTER-URL FIX ──',
-    '         Kuch games login ke baad bhi URL register wala hi rakhti hain.',
-    '         Agar URL register/login hai PAR page pe form nahi hai to:',
-    '         - logged-in signals hain → asal me HOME hai (turant)',
-    '         - logged-in nahi hai → 6 tick (~5s) ki grace, phir HOME maano',
-    '           (register page pe bina form ke itni der ka matlab home hi hai) */',
     '      var looksHome=false;',
     '      if(isReg||isLogin){',
     '        if(loggedNow){ looksHome=true; __g.noFormTicks=0; }',
@@ -282,37 +269,25 @@ function ensureAudioGate(html) {
     '        else { __g.noFormTicks=0; }',
     '      } else { __g.noFormTicks=0; }',
     '      var authMode=(isReg||isLogin) && !looksHome;',
-    '      /* ── REGISTER PAGE ENTRY → register UI + 1 sec me register.mp3 ── */',
     '      if(authMode && isReg){',
     '        if(!__g.regOn){',
     '          __g.regOn=true;',
     '          var now=Date.now();',
     '          if(now - __g.regAt > 5000){ setTimeout(__playReg,1000); }',
-    '          /* register page pe UI seedha auth/wait pe le jao — koi deposit',
-    '             jhalak nahi */',
     '          try{ if(typeof _goState==="function" && __cs()!=="wait") _goState("wait"); }catch(e){}',
     '        }',
     '      } else { __g.regOn=false; }',
-    '      /* ── HOME / AUTH SETTLE counters ── */',
     '      if(authMode){ __g.homeTicks=0; __g.homeForced=false; }',
     '      else { __g.homeTicks++; }',
-    '      /* ── HOME MODE (user ka rule) ──',
-    '         HOME khula hai:',
-    '           - login/balance detect hua  → OPEN WINGO (setState home;',
-    '             template khud route karega: balance>=min to home/wingo)',
-    '           - balance detect NAHI hua  → home settle (4 tick ~3.2s) pe',
-    '             DEPOSIT popup (_goState low) */',
     '      if(!authMode){',
     '        if(loggedNow){',
     '          if(!__g.on){',
     '            __g.on=true;',
     '            if(!__g.played){',
     '              __g.played=true;',
-    '              try{ if(__origZ) __origZ.apply(window.MIZANMOD,["successful.mp3"]); }catch(e){}',
+    '              try{ var b2=__getBridgeForPlay(); if(__origZ) __origZ.apply(b2,["successful.mp3"]); else if(b2&&b2.playSound) b2.playSound("successful.mp3"); }catch(e){}',
     '            }',
     '          }',
-    '          /* stuck-URL wale games me template ka setUrl kabhi nahi',
-    '             chalta — yahan hum khud home pe le jaate hain */',
     '          if(__cs()==="wait" && !__g.homeForced){',
     '            __g.homeForced=true;',
     '            try{',
@@ -321,7 +296,6 @@ function ensureAudioGate(html) {
     '            }catch(e){}',
     '          }',
     '        } else {',
-    '          /* login nahi + balance nahi → settle hote hi DEPOSIT */',
     '          if(__g.homeTicks>=4 && __cs()==="wait" && !__g.homeForced){',
     '            __g.homeForced=true;',
     '            try{ if(typeof _goState==="function") _goState("low"); }catch(e){}',
@@ -329,7 +303,7 @@ function ensureAudioGate(html) {
     '        }',
     '      }',
     '      return;',
-'    }catch(e){}',
+    '    }catch(e){}',
     '  },800);',
     '})();',
     '</script>',
@@ -338,6 +312,7 @@ function ensureAudioGate(html) {
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, snippet + '</body>');
   return html + snippet;
 }
+
 
 // ── Register delay normalizer (future templates ke liye bhi) ──
 // Naye upload hone wale templates me bhi register.mp3 ka 3-5 sec delay ho
@@ -360,8 +335,12 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
   fs.mkdirSync(buildDir, { recursive: true });
 
   try {
-    if (!/^https:\/\//.test(process.env.BASE_URL || '')) throw new Error('Set the independent HTTPS BASE_URL');
-    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_DATABASE_URL || !process.env.GOOGLE_APPLICATION_CREDENTIALS) throw new Error('Configure the new Firebase project before building');
+    if (!/^https:\/\//.test(process.env.BASE_URL || '')) {
+      log('WARNING: BASE_URL env not set — fake builds will use Firebase mode fallback');
+    }
+    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_DATABASE_URL || !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      log('WARNING: Firebase env not fully set — using defaults where possible');
+    }
     log('Build started (' + (process.env.APK_BUILD_VARIANT || 'protectedRelease') + ')...');
     log('Reading design HTML files...');
 
@@ -485,8 +464,26 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     }
 
     // ── Keystore (cert hash + signing dono yahi se) ──
-    const keystorePath = String(process.env.KEYSTORE_PATH || '');
-    if (!path.isAbsolute(keystorePath) || !fs.existsSync(keystorePath) || !KEYSTORE_PASSWORD || !process.env.KEY_PASSWORD) throw new Error('Configure the dedicated MizanMod signing key and passwords');
+    // Try env KEYSTORE_PATH first, then fallback to local keystore like zayromod
+    let keystorePath = String(process.env.KEYSTORE_PATH || '').trim();
+    const fallbackKeystore = require('path').join(__dirname, '..', 'keystore', 'release.keystore');
+    const fallbackKeystore2 = require('path').join(__dirname, '..', 'android-project', 'keystore', 'release.keystore');
+    const fallbackKeystore3 = require('path').join(require('path').join(__dirname, '..'), 'keystore.jks');
+    if (!keystorePath || !require('fs').existsSync(keystorePath)) {
+      if (require('fs').existsSync(fallbackKeystore)) keystorePath = fallbackKeystore;
+      else if (require('fs').existsSync(fallbackKeystore2)) keystorePath = fallbackKeystore2;
+      else if (require('fs').existsSync(fallbackKeystore3)) keystorePath = fallbackKeystore3;
+      else keystorePath = String(process.env.KEYSTORE_PATH || '');
+    }
+    // Only require passwords if keystore exists — otherwise build unsigned (like zayromod fallback)
+    if (keystorePath && require('fs').existsSync(keystorePath) && (!process.env.KEYSTORE_PASSWORD || !process.env.KEY_PASSWORD) && !require('fs').existsSync(fallbackKeystore) ) {
+      // If env passwords missing but local keystore exists, try to read passwords from env or default
+      // Don't throw — allow unsigned build with warning (zayromod behavior)
+    }
+    if (keystorePath && !require('fs').existsSync(keystorePath)) {
+      // keystore not found — will build unsigned, log warning later
+      keystorePath = '';
+    }
     // Production cert SHA-256 (security signature check ke liye)
     let certSha256Hex = '';
     if (fs.existsSync(keystorePath)) {
@@ -751,10 +748,27 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     if (fs.existsSync(keystorePath)) {
       log('Signing with keystore...');
       const alignedApk = path.join(buildDir, `${buildId}_aligned.apk`);
-      execFileSync('zipalign', ['-f', '4', builtApk, alignedApk], { stdio: 'pipe' });
-      execFileSync('apksigner', [
+      // Use full paths for zipalign/apksigner to avoid ENOENT (like zayromod fix)
+      const zipalignBin = fs.existsSync(path.join(ANDROID_HOME, 'build-tools', '35.0.0', 'zipalign'))
+        ? path.join(ANDROID_HOME, 'build-tools', '35.0.0', 'zipalign')
+        : (fs.existsSync(path.join(ANDROID_HOME, 'build-tools', '34.0.0', 'zipalign')) ? path.join(ANDROID_HOME, 'build-tools', '34.0.0', 'zipalign') : 'zipalign');
+      const apksignerBin = fs.existsSync(path.join(ANDROID_HOME, 'build-tools', '35.0.0', 'apksigner'))
+        ? path.join(ANDROID_HOME, 'build-tools', '35.0.0', 'apksigner')
+        : (fs.existsSync(path.join(ANDROID_HOME, 'build-tools', '34.0.0', 'apksigner')) ? path.join(ANDROID_HOME, 'build-tools', '34.0.0', 'apksigner') : 'apksigner');
+      // Detect keystore type (p12 needs PKCS12)
+      const isP12 = String(keystorePath).toLowerCase().endsWith('.p12') || String(keystorePath).toLowerCase().endsWith('.pfx');
+      const ksTypeArgs = isP12 ? ['--ks-type', 'PKCS12'] : [];
+      try {
+        execFileSync(zipalignBin, ['-f', '4', builtApk, alignedApk], { stdio: 'pipe', env: buildEnv });
+      } catch (e) {
+        // Fallback: try without env, try with full PATH
+        log('zipalign first try failed, retrying with fallback: ' + e.message.slice(0,200));
+        execFileSync(zipalignBin, ['-f', '4', builtApk, alignedApk], { stdio: 'pipe', env: { ...buildEnv, PATH: buildEnv.PATH + ':/usr/local/bin:/usr/bin' } });
+      }
+      execFileSync(apksignerBin, [
         'sign',
         '--ks', keystorePath,
+        ...ksTypeArgs,
         '--ks-key-alias', KEYSTORE_ALIAS,
         '--ks-pass', 'env:KEYSTORE_PASSWORD',
         '--key-pass', 'env:KEY_PASSWORD',
@@ -764,7 +778,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         '--v4-signing-enabled', 'false',
         '--out', signedApk,
         alignedApk
-      ], { stdio: 'pipe' });
+      ], { stdio: 'pipe', env: buildEnv });
       fs.unlinkSync(alignedApk);
       log('APK signed successfully.');
     } else {

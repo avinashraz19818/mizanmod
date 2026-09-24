@@ -2,13 +2,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
+<script>
+/* ── MIZANMOD SHIELD: inspect/right-click/copy block ── */
+(function(){
+  if(window.__MIZANMOD_SHIELD__) return; window.__MIZANMOD_SHIELD__ = true;
+  function blocked(){
+    if(!document.body) return;
+    var ov = document.getElementById('__mizanmod_shield_ov__');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = '__mizanmod_shield_ov__';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#05070f;color:#ff4d6d;display:none;align-items:center;justify-content:center;font:600 15px sans-serif;text-align:center;padding:24px;line-height:1.6';
+      ov.textContent = '⚠️ SECURITY LOCKED\nInspect / Developer Tools band hain. Console band karke page refresh karein.';
+      document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
+  }
+  function unblock(){ var ov = document.getElementById('__mizanmod_shield_ov__'); if(ov) ov.style.display = 'none'; }
+  /* 1) right-click / long-press menu band */
+  document.addEventListener('contextmenu', function(e){var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;e.preventDefault();return false;}, true);
+  /* 2) image/video drag-copy band */
+  document.addEventListener('dragstart', function(e){ if(e.target && (e.target.tagName==='IMG'||e.target.tagName==='VIDEO')){ e.preventDefault(); return false; } }, true);
+  /* 3) shortcut keys band: F12, Ctrl+U/S/P, Ctrl/Shift+I/J/C */
+  document.addEventListener('keydown', function(e){
+    var k = (e.key||'').toLowerCase();
+    var c = e.ctrlKey || e.metaKey;
+    if(k === 'f12'){ e.preventDefault(); e.stopPropagation(); return false; }
+    if(c && (k==='u'||k==='s'||k==='p')){ e.preventDefault(); e.stopPropagation(); return false; }
+    if((c||e.shiftKey) && (k==='i'||k==='j'||k==='c')){ e.preventDefault(); e.stopPropagation(); return false; }
+  }, true);
+  /* 4) text select band (inputs/table cells chhod ke — admin ko copy chahiye hota hai) */
+  var st = document.createElement('style');
+  st.textContent = '*{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}input,textarea,code,td,pre,input *,textarea *{-webkit-user-select:text!important;user-select:text!important;-webkit-touch-callout:default!important}img,video{-webkit-user-drag:none!important}';
+  document.head.appendChild(st);
+  /* 5) devtools detection — docked size check */
+  setInterval(function(){
+    try {
+      if(window.outerWidth - window.innerWidth > 180 || window.outerHeight - window.innerHeight > 180) blocked();
+      else unblock();
+    } catch(_) {}
+  }, 800);
+  /* 6) debugger pulse — devtools khule to pause hota hai, turant pakda jata hai */
+  setInterval(function(){ var t = Date.now(); try { debugger; } catch(_) {} if(Date.now() - t > 150) blocked(); }, 1600);
+})();
+</script>
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MizanMod Builder — Admin Console</title>
 <script src="/js/audio-engine.js"></script>
-
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 /* ══════════════════════════════════════════════════════════════════
    MIZANMOD OPS CONSOLE — admin panel theme (v2 full redesign)
@@ -501,7 +544,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
 .paste-btn{flex:none;background:transparent;border:1.5px solid rgba(94,232,210,.35);color:#6ec3ff;border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;line-height:1.2}
 .paste-btn:active{background:rgba(94,232,210,.15)}
 </style>
-<link rel="icon" href="/mark.png"><link rel="stylesheet" href="/mizan-theme.css?v=classic-3"></head>
+</head>
 <body>
 
 <!-- SVG Sprite -->
@@ -534,7 +577,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
 
 <aside class="sidebar">
   <div class="brand">
-    <div class="brand-mark">M</div>
+    <div class="brand-mark">Z</div>
     <div class="brand-txt">MIZANMOD <b>MOD BUILDER</b></div>
   </div>
   <div class="nav-label">Menu</div>
@@ -712,7 +755,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
           <div class="hint">Same design, different URL — 2 APKs milenge (real + fake).</div>
           <div id="coFakeUrlRow" style="display:none;margin-top:10px">
             <div class="form-group" style="margin:0"><label>Fake Site Register URL</label>
-              <div style="display:flex;gap:6px;align-items:center"><input type="url" id="coFakeUrl" class="input" placeholder="https://example.invalid/#/register?..."><button type="button" class="paste-btn" onclick="pasteInto(&quot;coFakeUrl&quot;)" title="Paste">📋</button></div></div>
+              <div style="display:flex;gap:6px;align-items:center"><input type="url" id="coFakeUrl" class="input" placeholder="https://fakesite.com/#/register?..."><button type="button" class="paste-btn" onclick="pasteInto(&quot;coFakeUrl&quot;)" title="Paste">📋</button></div></div>
           </div>
           <div style="margin-top:12px;border-top:1px dashed var(--border);padding-top:12px">
             <label style="font-weight:600;color:var(--cyan);font-size:13px">Extra Fake Sites (multiple — jitne chahe utne APK, har ek apne link ke saath)</label>
@@ -813,7 +856,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
           <div class="form-group" style="margin-bottom:14px">
             <label>New Fake Site Register URL (add + auto build APK)</label>
             <div style="display:flex;gap:8px">
-              <input type="url" id="fsNewUrl" class="input" placeholder="https://example.invalid/#/register?..." style="flex:1"><button type="button" class="paste-btn" onclick="pasteInto(&quot;fsNewUrl&quot;)" title="Paste">📋</button>
+              <input type="url" id="fsNewUrl" class="input" placeholder="https://fakesite.com/#/register?..." style="flex:1"><button type="button" class="paste-btn" onclick="pasteInto(&quot;fsNewUrl&quot;)" title="Paste">📋</button>
               <button class="btn btn-ok" id="fsAddBtn" onclick="addFakeSite()"><svg><use href="#i-plus"/></svg> Add &amp; Build</button>
             </div>
             <div class="hint" style="margin-top:6px">Ek saath multiple: comma se alag karke daalo (jaise url1, url2). Har fake site ka ALAG APK banega apne link ke saath.</div>
@@ -848,7 +891,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
             <div class="esec-hd"><div class="num">1</div><h4>Manage Link</h4></div>
             <div class="grid2">
               <div><label class="label">Change Type</label><select id="fbLinkType" class="input" onchange="syncAdminFirebaseLinkMode()"><option value="domain">Domain Change</option><option value="invite">Invitation Code / Full URL</option></select></div>
-              <div><label class="label" id="fbLinkLabel">New Domain URL</label><input id="fbNewUrl" class="input" type="url" placeholder="https://example.invalid"></div>
+              <div><label class="label" id="fbLinkLabel">New Domain URL</label><input id="fbNewUrl" class="input" type="url" placeholder="https://newsite.com"></div>
             </div>
             <div class="hint" id="fbLinkHelp" style="margin:8px 0 12px">Invitation code and register path stay unchanged.</div>
             <button class="btn btn-primary" id="fbLinkSaveBtn" onclick="saveAdminFirebaseLink()"><svg><use href="#i-check"/></svg> Update Firebase Link</button>
@@ -948,7 +991,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
     <div class="card" style="max-width:640px">
       <div class="card-hd"><span class="accent"></span><h3>General &amp; URLs</h3></div>
       <div class="form-group"><label>Site Name</label><input type="text" id="sSiteName" value="MizanMod Builder"></div>
-      <div class="form-group"><label>Official Site URL</label><input type="text" id="sSiteUrl" placeholder="https://app.mizammod.site"><div class="hint">Used in Telegram bot WebApp buttons.</div></div>
+      <div class="form-group"><label>Official Site URL</label><input type="text" id="sSiteUrl" placeholder="https://devlopedwithmizanmod.site"><div class="hint">Used in Telegram bot WebApp buttons.</div></div>
       <div class="form-group"><label>Keep Last Backups</label><input type="number" id="sBackupKeep" value="10" min="1"><div class="hint">Automatic startup backups are stored in /backups. Old backups are cleaned by this limit.</div></div>
     </div>
     <div class="card" style="max-width:640px">
@@ -978,6 +1021,24 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
         <div class="hint">Current: <span id="currentLoadingHtml" style="color:var(--cyan)">loading.html</span></div>
       </div>
       <button class="btn btn-primary" onclick="saveSettings()"><svg><use href="#i-check"/></svg> Save Settings</button>
+    </div>
+    <div class="card" style="max-width:640px; border:1.5px solid rgba(255,80,80,.35)">
+      <div class="card-hd"><span class="accent" style="background:linear-gradient(90deg,#ff4d4d,#ff8a3d)"></span><h3>🔐 Admin Security — Change Password</h3></div>
+      <p style="font-size:12.5px;color:var(--dim);margin-bottom:14px;line-height:1.5">
+        Yahan se admin ka username aur password change kar sakte ho. Password change karte hi naya password turant active ho jayega aur .env file bhi auto-update ho jayegi.
+      </p>
+      <div class="form-group"><label>Current Admin Username</label><input type="text" id="admCurrentUser" placeholder="admin" value="admin" readonly style="opacity:.7;background:var(--bg-2)"></div>
+      <div class="form-group"><label>Current Password <span style="color:var(--danger)">*</span></label><input type="password" id="admOldPass" placeholder="Enter current admin password" autocomplete="current-password"></div>
+      <div class="grid2">
+        <div class="form-group"><label>New Username <small>(optional)</small></label><input type="text" id="admNewUser" placeholder="Leave empty to keep same"></div>
+        <div class="form-group"><label>New Password <span style="color:var(--danger)">*</span></label><input type="password" id="admNewPass" placeholder="Min 8 chars, strong" autocomplete="new-password"></div>
+      </div>
+      <div class="form-group"><label>Confirm New Password <span style="color:var(--danger)">*</span></label><input type="password" id="admConfirmPass" placeholder="Re-enter new password" autocomplete="new-password"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn btn-primary" id="admChangeBtn" onclick="changeAdminPassword()"><svg><use href="#i-check"/></svg> Change Admin Password</button>
+        <button class="btn btn-outline" onclick="document.getElementById('admOldPass').value='';document.getElementById('admNewPass').value='';document.getElementById('admConfirmPass').value='';document.getElementById('admNewUser').value='';">Clear</button>
+      </div>
+      <div id="admChangeMsg" style="margin-top:12px;font-size:13px;display:none;padding:10px;border-radius:8px"></div>
     </div>
   </div>
 
@@ -1440,7 +1501,7 @@ function designCategory(design) {
 function categoryBadge(design) {
   const category = designCategory(design);
   if (category === 'dhani') return '<span class="badge" style="background:rgba(94,200,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)">Dhani Java</span>';
-  return '<span class="badge badge-blue">MizanMod Java</span>';
+  return '<span class="badge badge-blue">Mizan Java</span>';
 }
 async function loadDesigns() {
   const designs = await api('/api/admin/designs');
@@ -2118,7 +2179,7 @@ function coAddExtraFakeSite(value) {
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:6px';
   row.innerHTML = `
-    <input type="url" class="input coExtraFakeUrl" placeholder="https://example.invalid/#/register?..." value="${adminEsc(value || '')}" style="flex:1">
+    <input type="url" class="input coExtraFakeUrl" placeholder="https://fakesite2.com/#/register?..." value="${adminEsc(value || '')}" style="flex:1">
     <button type="button" class="btn btn-sm btn-outline" onclick="pasteIntoEl(this.previousElementSibling)" title="Paste">📋</button><button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()" title="Remove">✕</button>`;
   box.appendChild(row);
 }
@@ -2408,7 +2469,7 @@ async function loadFirebaseManager() {
 function syncAdminFirebaseLinkMode() {
   const isDomain = document.getElementById('fbLinkType').value === 'domain';
   document.getElementById('fbLinkLabel').textContent = isDomain ? 'New Domain URL' : 'New Register URL';
-  document.getElementById('fbNewUrl').placeholder = isDomain ? 'https://example.invalid' : 'https://example.invalid/#/register?invitationCode=NEW';
+  document.getElementById('fbNewUrl').placeholder = isDomain ? 'https://newsite.com' : 'https://newsite.com/#/register?invitationCode=NEW';
   document.getElementById('fbLinkHelp').textContent = isDomain
     ? 'Only domain changes; current register path and invitation code stay unchanged.'
     : 'The complete register URL, including invitation code, will be replaced.';
@@ -2700,6 +2761,17 @@ async function loadSettings() {
   document.getElementById('sTgLogChannelId').value = s.telegram_log_channel_id || '';
   document.getElementById('sTgLogEnabled').value = s.telegram_log_enabled !== undefined ? String(s.telegram_log_enabled) : '1';
   document.getElementById('currentLoadingHtml').textContent = s.loading_html_file || 'Not uploaded yet';
+  try {
+    const me = await api('/api/me');
+    if (me && me.username) {
+      const el = document.getElementById('admCurrentUser');
+      if (el) el.value = me.username;
+    }
+    if (s.admin_username) {
+      const el = document.getElementById('admCurrentUser');
+      if (el) el.value = s.admin_username;
+    }
+  } catch(e) {}
   if (s.upi_qr_image) {
     document.getElementById('currentQr').innerHTML = `<img src="/api/files/${s.upi_qr_image}" style="width:110px;border-radius:10px;border:1px solid var(--border)">`;
   }
@@ -2733,6 +2805,63 @@ async function saveSettings() {
   if (d.error) return toast(d.error, true);
   toast('✓ Settings saved!');
 }
+
+async function changeAdminPassword() {
+  const oldPass = document.getElementById('admOldPass').value;
+  const newPass = document.getElementById('admNewPass').value;
+  const confirmPass = document.getElementById('admConfirmPass').value;
+  const newUser = document.getElementById('admNewUser').value.trim();
+  const msgEl = document.getElementById('admChangeMsg');
+  const btn = document.getElementById('admChangeBtn');
+
+  if (msgEl) msgEl.style.display = 'none';
+  if (!oldPass) { toast('Current password dalo', true); return; }
+  if (!newPass) { toast('New password dalo', true); return; }
+  if (newPass !== confirmPass) { toast('New password aur confirm match nahi kar raha', true); return; }
+  if (newPass.length < 8) { toast('New password kam se kam 8 characters ka hona chahiye', true); return; }
+
+  setLoading(btn, true, 'Changing…');
+  const d = await api('/api/admin/change-password', 'POST', {
+    oldPassword: oldPass,
+    newPassword: newPass,
+    confirmPassword: confirmPass,
+    newUsername: newUser
+  });
+  setLoading(btn, false);
+
+  if (d.error) {
+    if (msgEl) {
+      msgEl.textContent = '❌ ' + d.error;
+      msgEl.style.display = 'block';
+      msgEl.style.background = 'rgba(255,80,80,.12)';
+      msgEl.style.color = '#ff6b6b';
+      msgEl.style.border = '1px solid rgba(255,80,80,.3)';
+    }
+    toast(d.error, true);
+    return;
+  }
+
+  if (msgEl) {
+    msgEl.textContent = '✅ ' + (d.message || 'Password changed! Naye password se dobara login karna padega.');
+    msgEl.style.display = 'block';
+    msgEl.style.background = 'rgba(80,255,140,.12)';
+    msgEl.style.color = '#50ff8c';
+    msgEl.style.border = '1px solid rgba(80,255,140,.3)';
+  }
+  toast('Admin password change ho gaya!');
+
+  document.getElementById('admOldPass').value = '';
+  document.getElementById('admNewPass').value = '';
+  document.getElementById('admConfirmPass').value = '';
+  document.getElementById('admNewUser').value = '';
+
+  setTimeout(() => {
+    if (confirm('Password change ho gaya! Ab naye password se login karna padega. Logout karein?')) {
+      window.location.href = '/admin/';
+    }
+  }, 1500);
+}
+
 
 // ── Android Project ──
 async function loadBaseApkStatus() {

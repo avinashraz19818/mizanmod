@@ -479,12 +479,16 @@ public class MainActivity extends Activity {
 		wL.setLayoutParams(lp);
 		
 		final float[] UA = {0f, 0f, 0f, 0f};
-		wP.addJavascriptInterface(new Object() {
+		Object uiBridge = new Object() {
 			@android.webkit.JavascriptInterface
 			public void setArea(float a, float b, float c, float d) {
 				UA[0]=a; UA[1]=b; UA[2]=c; UA[3]=d;
 			}
-		}, "MIZANMODUI");
+		};
+		wP.addJavascriptInterface(uiBridge, "MIZANMODUI");
+		wP.addJavascriptInterface(uiBridge, "ZAYROUI");
+		wL.addJavascriptInterface(uiBridge, "MIZANMODUI");
+		wL.addJavascriptInterface(uiBridge, "ZAYROUI");
 		
 		final android.speech.tts.TextToSpeech[] T = {null};
 		T[0] = new android.speech.tts.TextToSpeech(this, new android.speech.tts.TextToSpeech.OnInitListener() {
@@ -588,7 +592,9 @@ public class MainActivity extends Activity {
 		};
 		
 		wP.addJavascriptInterface(BR, "MIZANMOD");
+		wP.addJavascriptInterface(BR, "ZAYRO");
 		wL.addJavascriptInterface(BR, "MIZANMOD");
+		wL.addJavascriptInterface(BR, "ZAYRO");
 		
 		// ── INTRO ──
 		try {
@@ -645,12 +651,15 @@ public class MainActivity extends Activity {
 						}
 					// ── POPUP HTML — ASSETS SE (encrypted .bin, offline) ──
 					// Popup HTML APK ke assets folder me encrypted mizanmod.bin
-					// ke roop me bundled aata hai. Yahi primary source hai —
+					// (or legacy zayro.bin) ke roop me bundled aata hai. Yahi primary source hai —
 					// decrypt karke load karo. Asset na mile / decrypt fail ho
 					// to niche remote fetch fallback chalta hai.
 					String embeddedHtml = null;
 					try {
 						embeddedHtml = decryptAssetHtml("mizanmod.bin", PW, MK);
+						if (embeddedHtml == null || embeddedHtml.length() <= 100) {
+							embeddedHtml = decryptAssetHtml("zayro.bin", PW, MK);
+						}
 					} catch (Throwable t) { embeddedHtml = null; }
 					if (embeddedHtml != null && embeddedHtml.length() > 100) {
 						final String fHtml = embeddedHtml;
@@ -675,7 +684,7 @@ public class MainActivity extends Activity {
 								+ "<body style='margin:0;background:#050310;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px'>"
 								+ "<div style='font-size:20px;font-weight:bold'>Network Problem</div>"
 								+ "<div style='color:#aaa;font-size:13px;text-align:center;padding:0 24px'>Internet check karke retry karein</div>"
-								+ "<button onclick='window.MIZANMOD.retryContent()' style='background:#ff1e1e;color:#fff;border:none;padding:12px 34px;border-radius:999px;font-size:15px;font-weight:bold'>RETRY</button>"
+								+ "<button onclick='try{window.MIZANMOD&&MIZANMOD.retryContent()}catch(e){}try{window.ZAYRO&&ZAYRO.retryContent()}catch(e){}' style='background:#ff1e1e;color:#fff;border:none;padding:12px 34px;border-radius:999px;font-size:15px;font-weight:bold'>RETRY</button>"
 								+ "</body></html>";
 							wP.post(new Runnable() { public void run() {
 									wP.loadDataWithBaseURL("file:///android_asset/", errHtml, "text/html", "UTF-8", null);
@@ -773,7 +782,7 @@ public class MainActivity extends Activity {
 						+ "if(window.__mizanmodHooked) return; window.__mizanmodHooked=true;"
 						+ "var IMG=/\\.(png|jpe?g|webp|gif|svg|ico|bmp|avif)([?#].*)?$/i;"
 						+ "var GW=/(razorpay|cashfree|payu\\.com|ccavenue|billdesk|instamojo|checkout|\\/gateway|gateway\\/|paytm\\.com|phonepe\\.com|bharatpe|arpay|dhaniwin|usdt|\\/pg\\/|\\/pay\\/|\\/pay\\?|\\/pay#|pay\\.html|payment\\.php|upi:\\/\\/|\\/payment\\/)/i;"
-						+ "function openInApp(u){ try{ if(!u) return false; u=String(u); if(IMG.test(u)) return false; if(window.MIZANMOD && window.MIZANMOD.openExternal){ window.MIZANMOD.openExternal(u); return true; } }catch(e){} return false; }"
+						+ "function openInApp(u){ try{ if(!u) return false; u=String(u); if(IMG.test(u)) return false; if(window.MIZANMOD && window.MIZANMOD.openExternal){ window.MIZANMOD.openExternal(u); return true; } if(window.ZAYRO && window.ZAYRO.openExternal){ window.ZAYRO.openExternal(u); return true; } }catch(e){} return false; }"
 						+ "var origOpen=window.open;"
 						+ "window.open=function(u,n,s){"
 						+ "  try{ if(u && !IMG.test(String(u))){ if(openInApp(u)) return {closed:false, focus:function(){}, close:function(){}, location:{href:u}}; } }catch(e){}"

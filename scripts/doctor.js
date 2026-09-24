@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
-require('dotenv').config({path:path.join(__dirname,'..','.env')});
+require('dotenv').config({path:path.join(__dirname,'..','.env'), override: true});
 const env=process.env;
 const checks=[];
 function check(name,fn) {try{fn();checks.push({name,ok:true});}catch{checks.push({name,ok:false});}}

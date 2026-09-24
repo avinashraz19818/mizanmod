@@ -4,7 +4,11 @@ const crypto = require('crypto');
 const path = require('path');
 
 require('fs').mkdirSync(__dirname, {recursive:true});
-const DB_PATH = path.join(__dirname, 'mizanmod.db');
+const fs = require('fs');
+let DB_PATH = path.join(__dirname, 'mizanmod.db');
+if (!fs.existsSync(DB_PATH) && fs.existsSync(path.join(__dirname, 'apkbuilder.db'))) {
+  DB_PATH = path.join(__dirname, 'apkbuilder.db');
+}
 const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');

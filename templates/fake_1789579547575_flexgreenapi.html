@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>ZAYRO — Prediction Panel (API Result)</title>
+<title>MIZAN — Prediction Panel (API Result)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Chakra+Petch:wght@600;700&family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   ZAYRO — PREDICTION PANEL  ·  GREEN PULSE  (variant 2)
+   MIZAN — PREDICTION PANEL  ·  GREEN PULSE  (variant 2)
    • Same layout / IDs / logic as Violet Glass
    • New palette: pure green · mint · lime on deep forest-green glass
    • New motion: aurora border, orbiting satellites, radar sweep,
@@ -308,7 +308,7 @@ button{font-family:"Chakra Petch",sans-serif;-webkit-appearance:none;appearance:
       <div class="wo-head"><span class="wo-head-badge">AUTH SYSTEM</span></div>
       <div class="wo-body">
         <div class="wo-lock"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.2" fill="currentColor" stroke="none"/></svg></div>
-        <div class="wo-head-title wo-title" id="woTitle" data-zayro-title-target="warning">ZAYRO VIP</div>
+        <div class="wo-head-title wo-title" id="woTitle" data-zayro-title-target="warning">MIZAN VIP</div>
         <div><span class="wo-msg">ACCESS LOCKED</span></div>
         <div class="wo-sub">REGISTER OR LOGIN TO CONTINUE</div>
       </div>
@@ -330,7 +330,7 @@ button{font-family:"Chakra Petch",sans-serif;-webkit-appearance:none;appearance:
   <span class="z-light"></span>
 </div>
 
-<div id="panel" role="dialog" aria-label="ZAYRO prediction panel" data-state="wait">
+<div id="panel" role="dialog" aria-label="MIZAN prediction panel" data-state="wait">
   <span class="ring" aria-hidden="true"></span>
   <span class="orbit-wrap" aria-hidden="true">
     <span class="orbit" style="--t:8s;--r:-160px;--c:#86efac"><i></i></span>
@@ -345,7 +345,7 @@ button{font-family:"Chakra Petch",sans-serif;-webkit-appearance:none;appearance:
 
       <div class="header">
         <div class="avatar"><span><img src="my_icon.png" alt="" onerror="this.remove()">Z</span></div>
-        <div class="brand-wrapper"><div class="brand card-title-line1" id="panelBrand" data-zayro-brand-target="main" data-brand-target="main">ZAYRO</div><span id="mainBrandText" aria-hidden="true" style="display:none">ZAYRO</span></div>
+        <div class="brand-wrapper"><div class="brand card-title-line1" id="panelBrand" data-zayro-brand-target="main" data-brand-target="main">MIZAN</div><span id="mainBrandText" aria-hidden="true" style="display:none">MIZAN</span></div>
         <div class="active" id="stateBadge">LOCKED</div>
       </div>
 
@@ -384,7 +384,7 @@ button{font-family:"Chakra Petch",sans-serif;-webkit-appearance:none;appearance:
         <div class="state state-ready" id="readyState">
           <div class="state-icon"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2z"/></svg></div>
           <div class="big-title" id="readyTitle">SYSTEM READY</div>
-          <div class="pill">ZAYRO CORE</div>
+          <div class="pill">MIZAN CORE</div>
           <div class="info-chip" id="balanceLabel">● BALANCE ₹0.00</div>
         </div>
 
@@ -512,7 +512,7 @@ var activityLayer   = document.getElementById("activityLayer");
 var flash           = document.getElementById("flash");
 var panelBrand      = document.getElementById("panelBrand") || document.getElementById("mainBrandText");
 var woTitle         = document.getElementById("woTitle");
-var _panelNameText  = "ZAYRO";
+var _panelNameText  = "MIZAN";
 var _lastBrandWrite = "";
 var _lastWarnWrite  = "";
 var _nameSyncBusy   = false;
